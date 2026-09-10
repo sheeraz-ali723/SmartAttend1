@@ -11,16 +11,15 @@ import {
   FiCamera,
   FiLogOut,
   FiGrid,
+  FiX,
 } from "react-icons/fi";
 
-const Sidebar = () => {
+const Sidebar = ({ mobileOpen, setMobileOpen }) => {
   const navigate = useNavigate();
 
-  // Load administrator information from localStorage
   const [admin, setAdmin] = useState(() => {
     try {
       const savedAdmin = localStorage.getItem("smartAttendAdmin");
-
       return savedAdmin ? JSON.parse(savedAdmin) : null;
     } catch (error) {
       console.error("Failed to load administrator:", error);
@@ -28,11 +27,9 @@ const Sidebar = () => {
     }
   });
 
-  // Reload administrator information
   const loadAdmin = () => {
     try {
       const savedAdmin = localStorage.getItem("smartAttendAdmin");
-
       setAdmin(savedAdmin ? JSON.parse(savedAdmin) : null);
     } catch (error) {
       console.error("Failed to load administrator:", error);
@@ -40,12 +37,8 @@ const Sidebar = () => {
     }
   };
 
-  // Listen for account changes from Settings page
   useEffect(() => {
-    window.addEventListener(
-      "smartAttendAccountChanged",
-      loadAdmin
-    );
+    window.addEventListener("smartAttendAccountChanged", loadAdmin);
 
     return () => {
       window.removeEventListener(
@@ -55,21 +48,19 @@ const Sidebar = () => {
     };
   }, []);
 
-  // Main navigation
- const mainMenu = [
-  { name: "Dashboard", path: "/", icon: FiHome },
-  { name: "Students", path: "/students", icon: FiUsers },
-  { name: "Classes", path: "/classes", icon: FiGrid },
-  { name: "Attendance", path: "/attendance", icon: FiCheckSquare },
-  {
-    name: "Attendance History",
-    path: "/attendance-history",
-    icon: FiCalendar,
-  },
-  { name: "Reports", path: "/reports", icon: FiFileText },
-];
+  const mainMenu = [
+    { name: "Dashboard", path: "/", icon: FiHome },
+    { name: "Students", path: "/students", icon: FiUsers },
+    { name: "Classes", path: "/classes", icon: FiGrid },
+    { name: "Attendance", path: "/attendance", icon: FiCheckSquare },
+    {
+      name: "Attendance History",
+      path: "/attendance-history",
+      icon: FiCalendar,
+    },
+    { name: "Reports", path: "/reports", icon: FiFileText },
+  ];
 
-  // System navigation
   const systemMenu = [
     {
       name: "Analytics",
@@ -83,7 +74,6 @@ const Sidebar = () => {
     },
   ];
 
-  // Logout
   const handleLogout = () => {
     localStorage.removeItem("smartAttendToken");
     localStorage.removeItem("smartAttendAdmin");
@@ -93,169 +83,201 @@ const Sidebar = () => {
     });
   };
 
-  // Administrator initial
   const adminInitial = admin?.name
     ? admin.name.charAt(0).toUpperCase()
     : "A";
 
+  const handleNavigation = () => {
+    if (setMobileOpen) {
+      setMobileOpen(false);
+    }
+  };
+
   return (
-    <aside className="fixed left-0 top-0 z-50 hidden h-screen w-64 flex-col border-r border-gray-200 bg-white md:flex">
+    <>
+      {/* MOBILE OVERLAY */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
 
-      {/* =====================================================
-          LOGO
-      ====================================================== */}
-      <div className="flex h-20 items-center gap-3 border-b border-gray-200 px-6">
-        
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
-          <FiCamera size={21} />
-        </div>
+      {/* SIDEBAR */}
+      <aside
+        className={`
+          fixed left-0 top-0 z-50
+          flex h-screen w-64 flex-col
+          border-r border-gray-200 bg-white
+          transition-transform duration-300 ease-in-out
 
-        <div>
-          <h1 className="text-lg font-bold text-gray-900">
-            SmartAttend
-          </h1>
+          ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
 
-          <p className="text-xs text-gray-500">
-            AI Attendance
-          </p>
-        </div>
+          md:translate-x-0
+        `}
+      >
 
-      </div>
+        {/* LOGO */}
+        <div className="flex h-20 items-center justify-between border-b border-gray-200 px-6">
 
-      {/* =====================================================
-          NAVIGATION
-      ====================================================== */}
-      <nav className="flex-1 overflow-y-auto px-4 py-6">
+          <div className="flex items-center gap-3">
 
-        {/* MAIN MENU */}
-        <div>
-          <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
-            Main Menu
-          </p>
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
+              <FiCamera size={21} />
+            </div>
 
-          <div className="space-y-1">
-            {mainMenu.map((item) => {
-              const Icon = item.icon;
+            <div>
+              <h1 className="text-lg font-bold text-gray-900">
+                SmartAttend
+              </h1>
 
-              return (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end={item.path === "/"}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition ${
-                      isActive
-                        ? "bg-blue-50 text-blue-600"
-                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                    }`
-                  }
-                >
-                  <Icon size={19} />
+              <p className="text-xs text-gray-500">
+                AI Attendance
+              </p>
+            </div>
 
-                  <span>
-                    {item.name}
-                  </span>
-                </NavLink>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* SYSTEM MENU */}
-        <div className="mt-8">
-
-          <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
-            System
-          </p>
-
-          <div className="space-y-1">
-            {systemMenu.map((item) => {
-              const Icon = item.icon;
-
-              return (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition ${
-                      isActive
-                        ? "bg-blue-50 text-blue-600"
-                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                    }`
-                  }
-                >
-                  <Icon size={19} />
-
-                  <span>
-                    {item.name}
-                  </span>
-                </NavLink>
-              );
-            })}
           </div>
 
-        </div>
-
-      </nav>
-
-      {/* =====================================================
-          ADMINISTRATOR PROFILE
-      ====================================================== */}
-      <div className="border-t border-gray-200 p-4">
-
-        <div className="mb-4 flex items-center gap-3">
-
-          {/* PROFILE PICTURE */}
-          {admin?.profilePicture ? (
-            <img
-              src={admin.profilePicture}
-              alt="Administrator"
-              className="h-10 w-10 flex-shrink-0 rounded-full border border-gray-200 object-cover"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-                e.currentTarget.nextElementSibling.style.display =
-                  "flex";
-              }}
-            />
-          ) : null}
-
-          {/* DEFAULT INITIAL */}
-          <div
-            className={`h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-600 ${
-              admin?.profilePicture ? "hidden" : "flex"
-            }`}
+          {/* MOBILE CLOSE BUTTON */}
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 md:hidden"
           >
-            {adminInitial}
-          </div>
-
-          {/* ADMIN INFORMATION */}
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-gray-900">
-              {admin?.name || "Administrator"}
-            </p>
-
-            <p className="truncate text-xs text-gray-500">
-              {admin?.role || "Administrator"}
-            </p>
-          </div>
+            <FiX size={22} />
+          </button>
 
         </div>
 
-        {/* LOGOUT BUTTON */}
-        <button
-          onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50"
-        >
-          <FiLogOut size={19} />
+        {/* NAVIGATION */}
+        <nav className="flex-1 overflow-y-auto px-4 py-6">
 
-          <span>
-            Logout
-          </span>
-        </button>
+          {/* MAIN MENU */}
+          <div>
 
-      </div>
+            <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
+              Main Menu
+            </p>
 
-    </aside>
+            <div className="space-y-1">
+
+              {mainMenu.map((item) => {
+                const Icon = item.icon;
+
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    end={item.path === "/"}
+                    onClick={handleNavigation}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition ${
+                        isActive
+                          ? "bg-blue-50 text-blue-600"
+                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                      }`
+                    }
+                  >
+                    <Icon size={19} />
+                    <span>{item.name}</span>
+                  </NavLink>
+                );
+              })}
+
+            </div>
+          </div>
+
+          {/* SYSTEM MENU */}
+          <div className="mt-8">
+
+            <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
+              System
+            </p>
+
+            <div className="space-y-1">
+
+              {systemMenu.map((item) => {
+                const Icon = item.icon;
+
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    onClick={handleNavigation}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition ${
+                        isActive
+                          ? "bg-blue-50 text-blue-600"
+                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                      }`
+                    }
+                  >
+                    <Icon size={19} />
+                    <span>{item.name}</span>
+                  </NavLink>
+                );
+              })}
+
+            </div>
+          </div>
+
+        </nav>
+
+        {/* ADMINISTRATOR */}
+        <div className="border-t border-gray-200 p-4">
+
+          <div className="mb-4 flex items-center gap-3">
+
+            {admin?.profilePicture ? (
+              <img
+                src={admin.profilePicture}
+                alt="Administrator"
+                className="h-10 w-10 flex-shrink-0 rounded-full border border-gray-200 object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+
+                  if (e.currentTarget.nextElementSibling) {
+                    e.currentTarget.nextElementSibling.style.display =
+                      "flex";
+                  }
+                }}
+              />
+            ) : null}
+
+            <div
+              className={`h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-600 ${
+                admin?.profilePicture ? "hidden" : "flex"
+              }`}
+            >
+              {adminInitial}
+            </div>
+
+            <div className="min-w-0">
+
+              <p className="truncate text-sm font-semibold text-gray-900">
+                {admin?.name || "Administrator"}
+              </p>
+
+              <p className="truncate text-xs text-gray-500">
+                {admin?.role || "Administrator"}
+              </p>
+
+            </div>
+
+          </div>
+
+          {/* LOGOUT */}
+          <button
+            onClick={handleLogout}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50"
+          >
+            <FiLogOut size={19} />
+            <span>Logout</span>
+          </button>
+
+        </div>
+
+      </aside>
+    </>
   );
 };
 

@@ -30,8 +30,8 @@ const Reports = () => {
         setLoading(true);
 
         const [studentsRes, attendanceRes] = await Promise.all([
-          fetch("http://railway-up-production-d063.up.railway.app/api/students"),
-          fetch("http://railway-up-production-d063.up.railway.app/api/attendance"),
+          fetch("https://railway-up-production-d063.up.railway.app/api/students"),
+          fetch("https://railway-up-production-d063.up.railway.app/api/attendance"),
         ]);
 
         if (!studentsRes.ok || !attendanceRes.ok) {

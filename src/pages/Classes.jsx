@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const API_URL = "http://railway-up-production-d063.up.railway.app";
+const API_URL = "https://railway-up-production-d063.up.railway.app";
 
 const Classes = () => {
   const [classes, setClasses] = useState([]);

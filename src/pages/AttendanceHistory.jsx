@@ -16,7 +16,7 @@ const AttendanceHistory = () => {
       setLoading(true);
 
       const response = await fetch(
-        "http://railway-up-production-d063.up.railway.app/api/attendance"
+        "https://railway-up-production-d063.up.railway.app/api/attendance"
       );
 
       const data = await response.json();

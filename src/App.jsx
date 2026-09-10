@@ -19,29 +19,24 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* ==================================================
-            LOGIN
-        ================================================== */}
+
+        {/* LOGIN */}
         <Route
           path="/login"
           element={<Login />}
         />
 
-        {/* ==================================================
-            ATTENDANCE KIOSK
-            No Admin Sidebar
-            No Admin Dashboard
-        ================================================== */}
+        {/* ATTENDANCE KIOSK */}
         <Route
           path="/attendance-kiosk"
           element={<AttendanceKiosk />}
         />
 
-        {/* ==================================================
-            PROTECTED ADMIN AREA
-        ================================================== */}
+        {/* PROTECTED ADMIN AREA */}
         <Route element={<ProtectedRoute />}>
+
           <Route element={<Layout />}>
+
             <Route
               path="/"
               element={<Dashboard />}
@@ -51,7 +46,11 @@ function App() {
               path="/students"
               element={<Students />}
             />
-            <Route path="/classes" element={<Classes />} />
+
+            <Route
+              path="/classes"
+              element={<Classes />}
+            />
 
             <Route
               path="/attendance"
@@ -82,8 +81,11 @@ function App() {
               path="/settings"
               element={<Settings />}
             />
+
           </Route>
+
         </Route>
+
       </Routes>
     </BrowserRouter>
   );

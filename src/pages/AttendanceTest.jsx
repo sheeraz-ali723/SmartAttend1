@@ -6,7 +6,7 @@ const AttendanceTest = () => {
   const markAttendance = async () => {
     try {
       const response = await fetch(
-        "http://railway-up-production-d063.up.railway.app/api/attendance/mark",
+        "https://railway-up-production-d063.up.railway.app/api/attendance/mark",
         {
           method: "POST",
           headers: {
