@@ -9,8 +9,7 @@ import {
 const Dashboard = () => {
   const [students, setStudents] = useState([]);
   const [attendance, setAttendance] = useState([]);
-  const [todayAttendance, setTodayAttendance] =
-    useState([]);
+  const [todayAttendance, setTodayAttendance] = useState([]);
 
   // ======================================================
   // FETCH DASHBOARD DATA
@@ -33,43 +32,27 @@ const Dashboard = () => {
         ] = await Promise.all([
           fetch(
             "https://railway-up-production-d063.up.railway.app/api/students",
-            {
-              headers,
-            }
+            { headers }
           ),
           fetch(
             "https://railway-up-production-d063.up.railway.app/api/attendance",
-            {
-              headers,
-            }
+            { headers }
           ),
           fetch(
             "https://railway-up-production-d063.up.railway.app/api/attendance/today",
-            {
-              headers,
-            }
+            { headers }
           ),
         ]);
-
-        // --------------------------------------------------
-        // AUTHENTICATION CHECK
-        // --------------------------------------------------
 
         if (
           studentsResponse.status === 401 ||
           attendanceResponse.status === 401 ||
           todayAttendanceResponse.status === 401
         ) {
-          localStorage.removeItem(
-            "smartAttendToken"
-          );
-
-          localStorage.removeItem(
-            "smartAttendAdmin"
-          );
+          localStorage.removeItem("smartAttendToken");
+          localStorage.removeItem("smartAttendAdmin");
 
           window.location.href = "/login";
-
           return;
         }
 
@@ -119,7 +102,6 @@ const Dashboard = () => {
 
     fetchData();
 
-    // Refresh when returning to Dashboard
     const handleVisibilityChange = () => {
       if (
         document.visibilityState === "visible"
@@ -142,7 +124,7 @@ const Dashboard = () => {
   }, []);
 
   // ======================================================
-  // GET STUDENT ID
+  // HELPERS
   // ======================================================
 
   const getStudentId = (student) => {
@@ -157,10 +139,6 @@ const Dashboard = () => {
     return student.toString();
   };
 
-  // ======================================================
-  // GET PAKISTAN DATE KEY
-  // ======================================================
-
   const getPakistanDateKey = (date) => {
     if (!date) return null;
 
@@ -172,10 +150,6 @@ const Dashboard = () => {
     }).format(new Date(date));
   };
 
-  // ======================================================
-  // GET DAY NAME
-  // ======================================================
-
   const getDayName = (date) => {
     return new Intl.DateTimeFormat("en-US", {
       timeZone: "Asia/Karachi",
@@ -184,7 +158,7 @@ const Dashboard = () => {
   };
 
   // ======================================================
-  // TODAY'S VALID ATTENDANCE
+  // TODAY'S ATTENDANCE
   // ======================================================
 
   const validTodayAttendance =
@@ -193,10 +167,6 @@ const Dashboard = () => {
         record &&
         record.student
     );
-
-  // ======================================================
-  // UNIQUE TODAY'S STUDENT STATUS
-  // ======================================================
 
   const todayStudentStatus = new Map();
 
@@ -211,7 +181,6 @@ const Dashboard = () => {
       const existingStatus =
         todayStudentStatus.get(studentId);
 
-      // Present gets priority
       if (
         !existingStatus ||
         record.status === "Present"
@@ -224,28 +193,16 @@ const Dashboard = () => {
     }
   );
 
-  // ======================================================
-  // PRESENT TODAY
-  // ======================================================
-
   const presentCount = Array.from(
     todayStudentStatus.values()
   ).filter(
     (status) => status === "Present"
   ).length;
 
-  // ======================================================
-  // ABSENT TODAY
-  // ======================================================
-
   const absentCount = Math.max(
     students.length - presentCount,
     0
   );
-
-  // ======================================================
-  // ATTENDANCE RATE
-  // ======================================================
 
   const attendanceRate =
     students.length > 0
@@ -260,7 +217,7 @@ const Dashboard = () => {
       : 0;
 
   // ======================================================
-  // DASHBOARD CARDS
+  // STAT CARDS
   // ======================================================
 
   const stats = [
@@ -306,10 +263,6 @@ const Dashboard = () => {
     const targetDateKey =
       getPakistanDateKey(date);
 
-    // ----------------------------------------------------
-    // GET RECORDS FOR THIS DAY
-    // ----------------------------------------------------
-
     const dayRecords =
       attendance.filter((record) => {
         if (
@@ -325,10 +278,6 @@ const Dashboard = () => {
           ) === targetDateKey
         );
       });
-
-    // ----------------------------------------------------
-    // UNIQUE STUDENT STATUS
-    // ----------------------------------------------------
 
     const studentStatusForDay =
       new Map();
@@ -347,7 +296,6 @@ const Dashboard = () => {
             studentId
           );
 
-        // Present gets priority
         if (
           !existingStatus ||
           record.status === "Present"
@@ -360,10 +308,6 @@ const Dashboard = () => {
       }
     );
 
-    // ----------------------------------------------------
-    // PRESENT
-    // ----------------------------------------------------
-
     const present =
       Array.from(
         studentStatusForDay.values()
@@ -371,10 +315,6 @@ const Dashboard = () => {
         (status) =>
           status === "Present"
       ).length;
-
-    // ----------------------------------------------------
-    // ABSENT
-    // ----------------------------------------------------
 
     let absent = 0;
 
@@ -384,10 +324,6 @@ const Dashboard = () => {
         0
       );
     }
-
-    // ----------------------------------------------------
-    // PERCENTAGES
-    // ----------------------------------------------------
 
     const presentPercentage =
       students.length > 0
@@ -451,8 +387,7 @@ const Dashboard = () => {
     ).toLocaleTimeString(
       "en-PK",
       {
-        timeZone:
-          "Asia/Karachi",
+        timeZone: "Asia/Karachi",
         hour: "2-digit",
         minute: "2-digit",
         second: "2-digit",
@@ -465,18 +400,18 @@ const Dashboard = () => {
   // ======================================================
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
+    <div className="w-full min-w-0">
 
       {/* ==================================================
           HEADER
       ================================================== */}
 
-      <div className="mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">
+      <div className="mb-5 sm:mb-8">
+        <h1 className="text-2xl font-bold text-slate-800 sm:text-3xl">
           Dashboard
         </h1>
 
-        <p className="mt-1 text-sm sm:text-base text-slate-500">
+        <p className="mt-1 text-sm text-slate-500 sm:text-base">
           Welcome back, Admin 👋
         </p>
       </div>
@@ -485,38 +420,38 @@ const Dashboard = () => {
           STAT CARDS
       ================================================== */}
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
 
-        {stats.map(
-          (stat, index) => (
-            <div
-              key={index}
-              className="rounded-2xl bg-white p-5 shadow-sm"
-            >
-              <div className="flex items-center justify-between">
+        {stats.map((stat, index) => (
+          <div
+            key={index}
+            className="min-w-0 rounded-2xl bg-white p-4 shadow-sm sm:p-5"
+          >
+            <div className="flex items-center justify-between gap-3">
 
-                <div>
-                  <p className="text-sm font-medium text-slate-500">
-                    {stat.title}
-                  </p>
+              <div className="min-w-0">
 
-                  <h2 className="mt-2 text-3xl font-bold text-slate-800">
-                    {stat.value}
-                  </h2>
+                <p className="truncate text-xs font-medium text-slate-500 sm:text-sm">
+                  {stat.title}
+                </p>
 
-                  <p className="mt-1 text-xs text-slate-400">
-                    {stat.description}
-                  </p>
-                </div>
+                <h2 className="mt-1 text-2xl font-bold text-slate-800 sm:mt-2 sm:text-3xl">
+                  {stat.value}
+                </h2>
 
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-xl text-blue-600">
-                  {stat.icon}
-                </div>
+                <p className="mt-1 truncate text-[11px] text-slate-400 sm:text-xs">
+                  {stat.description}
+                </p>
 
               </div>
+
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-lg text-blue-600 sm:h-12 sm:w-12 sm:text-xl">
+                {stat.icon}
+              </div>
+
             </div>
-          )
-        )}
+          </div>
+        ))}
 
       </div>
 
@@ -524,29 +459,29 @@ const Dashboard = () => {
           LOWER SECTION
       ================================================== */}
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 sm:mt-6 sm:gap-6 lg:grid-cols-2">
 
         {/* =================================================
             ATTENDANCE OVERVIEW
         ================================================= */}
 
-        <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-sm">
+        <div className="min-w-0 rounded-2xl bg-white p-4 shadow-sm sm:p-6">
 
-          <div className="mb-6">
+          <div className="mb-5 sm:mb-6">
             <h2 className="text-lg font-semibold text-slate-800">
               Attendance Overview
             </h2>
 
-            <p className="text-sm text-slate-400">
+            <p className="text-xs text-slate-400 sm:text-sm">
               Weekly attendance statistics
             </p>
           </div>
 
-          <div className="rounded-xl bg-slate-50 p-4 sm:p-5">
+          <div className="w-full rounded-xl bg-slate-50 p-3 sm:p-5">
 
-            {/* BAR SECTION */}
+            {/* CHART */}
 
-            <div className="flex h-56 items-end justify-between gap-2 sm:gap-3">
+            <div className="flex h-52 w-full items-end justify-between gap-1 sm:h-56 sm:gap-3">
 
               {attendanceData.map(
                 (item, index) => (
@@ -557,17 +492,17 @@ const Dashboard = () => {
 
                     {/* BARS */}
 
-                    <div className="flex h-48 w-full max-w-12 items-end justify-center gap-1 overflow-hidden">
+                    <div className="flex h-44 w-full max-w-14 items-end justify-center gap-0.5 sm:h-48 sm:gap-1">
 
                       {/* PRESENT */}
 
                       <div
-                        className="w-1/2 rounded-t-md bg-blue-500 transition-all duration-300"
+                        className="w-1/2 rounded-t-sm bg-blue-500 transition-all duration-300 sm:rounded-t-md"
                         style={{
                           height: `${Math.min(
                             item.present *
-                              1.92,
-                            192
+                              1.75,
+                            175
                           )}px`,
                         }}
                         title={`Present: ${item.present}%`}
@@ -576,12 +511,12 @@ const Dashboard = () => {
                       {/* ABSENT */}
 
                       <div
-                        className="w-1/2 rounded-t-md bg-red-300 transition-all duration-300"
+                        className="w-1/2 rounded-t-sm bg-red-300 transition-all duration-300 sm:rounded-t-md"
                         style={{
                           height: `${Math.min(
                             item.absent *
-                              1.92,
-                            192
+                              1.75,
+                            175
                           )}px`,
                         }}
                         title={`Absent: ${item.absent}%`}
@@ -591,7 +526,7 @@ const Dashboard = () => {
 
                     {/* DAY */}
 
-                    <p className="mt-3 text-xs font-medium text-slate-500">
+                    <p className="mt-2 text-[10px] font-medium text-slate-500 sm:mt-3 sm:text-xs">
                       {item.day}
                     </p>
 
@@ -603,20 +538,20 @@ const Dashboard = () => {
 
             {/* LEGEND */}
 
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-5 sm:gap-6 border-t border-slate-200 pt-4">
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-4 border-t border-slate-200 pt-3 sm:mt-5 sm:gap-6 sm:pt-4">
 
               <div className="flex items-center gap-2">
-                <span className="h-3 w-3 rounded-full bg-blue-500"></span>
+                <span className="h-2.5 w-2.5 rounded-full bg-blue-500 sm:h-3 sm:w-3" />
 
-                <span className="text-xs text-slate-500">
+                <span className="text-[11px] text-slate-500 sm:text-xs">
                   Present
                 </span>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="h-3 w-3 rounded-full bg-red-300"></span>
+                <span className="h-2.5 w-2.5 rounded-full bg-red-300 sm:h-3 sm:w-3" />
 
-                <span className="text-xs text-slate-500">
+                <span className="text-[11px] text-slate-500 sm:text-xs">
                   Absent
                 </span>
               </div>
@@ -631,22 +566,21 @@ const Dashboard = () => {
             RECENT ATTENDANCE
         ================================================= */}
 
-        <div className="rounded-2xl bg-white p-4 sm:p-6 shadow-sm">
+        <div className="min-w-0 rounded-2xl bg-white p-4 shadow-sm sm:p-6">
 
-          <div className="mb-6">
+          <div className="mb-5 sm:mb-6">
             <h2 className="text-lg font-semibold text-slate-800">
               Recent Attendance
             </h2>
 
-            <p className="text-sm text-slate-400">
+            <p className="text-xs text-slate-400 sm:text-sm">
               Today's latest records
             </p>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
 
-            {recentAttendance.length ===
-            0 ? (
+            {recentAttendance.length === 0 ? (
               <p className="py-6 text-center text-sm text-slate-400">
                 No attendance records
                 for today.
@@ -659,25 +593,27 @@ const Dashboard = () => {
                       record._id ||
                       index
                     }
-                    className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3"
+                    className="flex min-w-0 items-center justify-between gap-3 border-b border-slate-100 pb-3"
                   >
 
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-slate-700">
+                    <div className="min-w-0 flex-1">
+
+                      <p className="truncate text-sm font-medium text-slate-700 sm:text-base">
                         {record.student
                           ?.name ||
                           "Unknown Student"}
                       </p>
 
-                      <p className="text-xs text-slate-400">
+                      <p className="text-[11px] text-slate-400 sm:text-xs">
                         {formatTime(
                           record.date
                         )}
                       </p>
+
                     </div>
 
                     <span
-                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-medium sm:px-3 sm:text-xs ${
                         record.status ===
                         "Present"
                           ? "bg-green-50 text-green-600"

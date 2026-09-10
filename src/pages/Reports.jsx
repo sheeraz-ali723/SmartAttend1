@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import Sidebar from "../Components/Sidebar";
 import {
   FiCalendar,
   FiUsers,
@@ -29,10 +28,31 @@ const Reports = () => {
       try {
         setLoading(true);
 
+        const token = localStorage.getItem("smartAttendToken");
+
+        const headers = token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {};
+
         const [studentsRes, attendanceRes] = await Promise.all([
-          fetch("https://railway-up-production-d063.up.railway.app/api/students"),
-          fetch("https://railway-up-production-d063.up.railway.app/api/attendance"),
+          fetch(
+            "https://railway-up-production-d063.up.railway.app/api/students",
+            { headers }
+          ),
+          fetch(
+            "https://railway-up-production-d063.up.railway.app/api/attendance",
+            { headers }
+          ),
         ]);
+
+        if (studentsRes.status === 401 || attendanceRes.status === 401) {
+          localStorage.removeItem("smartAttendToken");
+          localStorage.removeItem("smartAttendAdmin");
+          window.location.href = "/login";
+          return;
+        }
 
         if (!studentsRes.ok || !attendanceRes.ok) {
           throw new Error("Failed to fetch report data");
@@ -42,6 +62,7 @@ const Reports = () => {
         const attendanceData = await attendanceRes.json();
 
         setStudents(Array.isArray(studentsData) ? studentsData : []);
+
         setAttendance(
           Array.isArray(attendanceData) ? attendanceData : []
         );
@@ -131,11 +152,6 @@ const Reports = () => {
       const student = record.student;
 
       const studentId = getStudentId(student);
-
-      const studentName =
-        typeof student === "object"
-          ? student.name || ""
-          : "";
 
       const studentDepartment =
         typeof student === "object"
@@ -283,420 +299,401 @@ const Reports = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar />
+    <div className="w-full min-w-0">
 
-      <main className="flex-1 p-4 sm:p-6 lg:p-8">
-        <div className="max-w-7xl mx-auto">
+      {/* ======================================================
+          HEADER
+      ====================================================== */}
+      <div className="mb-5 flex flex-col gap-4 sm:mb-8 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-gray-800 sm:text-3xl">
+            Reports
+          </h1>
 
-          {/* ======================================================
-              HEADER
-          ====================================================== */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
-                Reports
-              </h1>
+          <p className="mt-1 text-sm text-gray-500 sm:text-base">
+            Generate and analyze attendance reports
+          </p>
+        </div>
 
-              <p className="text-gray-500 mt-1">
-                Generate and analyze attendance reports
-              </p>
+        <button
+          onClick={exportCSV}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 sm:w-auto sm:px-5"
+        >
+          <FiDownload size={18} />
+          Export CSV
+        </button>
+      </div>
+
+      {/* ======================================================
+          FILTERS
+      ====================================================== */}
+      <div className="mb-5 rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:mb-6 sm:p-5">
+        <div className="mb-4 flex items-center gap-2 sm:mb-5">
+          <FiFilter
+            className="text-blue-600"
+            size={19}
+          />
+
+          <h2 className="text-base font-semibold text-gray-800 sm:text-lg">
+            Report Filters
+          </h2>
+        </div>
+
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+
+          {/* DATE */}
+          <div className="min-w-0">
+            <label className="mb-2 block text-xs font-medium text-gray-600 sm:text-sm">
+              Date
+            </label>
+
+            <div className="relative">
+              <FiCalendar
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                size={17}
+              />
+
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) =>
+                  setSelectedDate(e.target.value)
+                }
+                className="w-full min-w-0 rounded-lg border border-gray-200 py-2.5 pl-10 pr-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+              />
             </div>
+          </div>
 
-            <button
-              onClick={exportCSV}
-              className="flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm transition"
+          {/* STUDENT */}
+          <div className="min-w-0">
+            <label className="mb-2 block text-xs font-medium text-gray-600 sm:text-sm">
+              Student
+            </label>
+
+            <select
+              value={selectedStudent}
+              onChange={(e) =>
+                setSelectedStudent(e.target.value)
+              }
+              className="w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <FiDownload size={18} />
-              Export CSV
-            </button>
+              <option value="All">All Students</option>
+
+              {students.map((student) => (
+                <option
+                  key={student._id}
+                  value={student._id}
+                >
+                  {student.name}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* ======================================================
-              FILTERS
-          ====================================================== */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
-            <div className="flex items-center gap-2 mb-5">
-              <FiFilter className="text-blue-600" size={20} />
+          {/* DEPARTMENT */}
+          <div className="min-w-0">
+            <label className="mb-2 block text-xs font-medium text-gray-600 sm:text-sm">
+              Department
+            </label>
 
-              <h2 className="text-lg font-semibold text-gray-800">
-                Report Filters
-              </h2>
-            </div>
+            <select
+              value={selectedDepartment}
+              onChange={(e) =>
+                setSelectedDepartment(e.target.value)
+              }
+              className="w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="All">
+                All Departments
+              </option>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-
-              {/* DATE */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Date
-                </label>
-
-                <div className="relative">
-                  <FiCalendar
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                    size={18}
-                  />
-
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) =>
-                      setSelectedDate(e.target.value)
-                    }
-                    className="w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
-              {/* STUDENT */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Student
-                </label>
-
-                <select
-                  value={selectedStudent}
-                  onChange={(e) =>
-                    setSelectedStudent(e.target.value)
-                  }
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+              {departments.map((department) => (
+                <option
+                  key={department}
+                  value={department}
                 >
-                  <option value="All">All Students</option>
-
-                  {students.map((student) => (
-                    <option
-                      key={student._id}
-                      value={student._id}
-                    >
-                      {student.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* DEPARTMENT */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Department
-                </label>
-
-                <select
-                  value={selectedDepartment}
-                  onChange={(e) =>
-                    setSelectedDepartment(e.target.value)
-                  }
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="All">
-                    All Departments
-                  </option>
-
-                  {departments.map((department) => (
-                    <option
-                      key={department}
-                      value={department}
-                    >
-                      {department}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* STATUS */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Status
-                </label>
-
-                <select
-                  value={selectedStatus}
-                  onChange={(e) =>
-                    setSelectedStatus(e.target.value)
-                  }
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="All">All Status</option>
-                  <option value="Present">Present</option>
-                  <option value="Absent">Absent</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex justify-end mt-4">
-              <button
-                onClick={resetFilters}
-                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-blue-600 transition"
-              >
-                Clear Filters
-              </button>
-            </div>
+                  {department}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* ======================================================
-              STATISTICS
-          ====================================================== */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+          {/* STATUS */}
+          <div className="min-w-0">
+            <label className="mb-2 block text-xs font-medium text-gray-600 sm:text-sm">
+              Status
+            </label>
 
-            {/* TOTAL */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">
-                    Total Records
-                  </p>
-
-                  <h3 className="text-3xl font-bold text-gray-800 mt-2">
-                    {reportStats.total}
-                  </h3>
-                </div>
-
-                <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center">
-                  <FiBarChart2
-                    className="text-blue-600"
-                    size={23}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* PRESENT */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">
-                    Present
-                  </p>
-
-                  <h3 className="text-3xl font-bold text-green-600 mt-2">
-                    {reportStats.present}
-                  </h3>
-                </div>
-
-                <div className="w-12 h-12 rounded-lg bg-green-50 flex items-center justify-center">
-                  <FiCheckCircle
-                    className="text-green-600"
-                    size={23}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* ABSENT */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">
-                    Absent
-                  </p>
-
-                  <h3 className="text-3xl font-bold text-red-600 mt-2">
-                    {reportStats.absent}
-                  </h3>
-                </div>
-
-                <div className="w-12 h-12 rounded-lg bg-red-50 flex items-center justify-center">
-                  <FiXCircle
-                    className="text-red-600"
-                    size={23}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* PERCENTAGE */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">
-                    Attendance Rate
-                  </p>
-
-                  <h3 className="text-3xl font-bold text-purple-600 mt-2">
-                    {reportStats.percentage}%
-                  </h3>
-                </div>
-
-                <div className="w-12 h-12 rounded-lg bg-purple-50 flex items-center justify-center">
-                  <FiUsers
-                    className="text-purple-600"
-                    size={23}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ======================================================
-              REPORT TABLE
-          ====================================================== */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-
-            <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-800">
-                  Attendance Report
-                </h2>
-
-                <p className="text-sm text-gray-500 mt-1">
-                  {filteredAttendance.length} record
-                  {filteredAttendance.length !== 1
-                    ? "s"
-                    : ""}{" "}
-                  found
-                </p>
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="py-16 text-center text-gray-500">
-                Loading report...
-              </div>
-            ) : filteredAttendance.length === 0 ? (
-              <div className="py-16 text-center">
-                <FiBarChart2
-                  className="mx-auto text-gray-300"
-                  size={45}
-                />
-
-                <p className="text-gray-500 mt-3">
-                  No attendance records found
-                </p>
-
-                <button
-                  onClick={resetFilters}
-                  className="mt-4 text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  Clear filters
-                </button>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px]">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
-                        Student
-                      </th>
-
-                      <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
-                        Roll Number
-                      </th>
-
-                      <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
-                        Department
-                      </th>
-
-                      <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
-                        Date
-                      </th>
-
-                      <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
-                        Time
-                      </th>
-
-                      <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
-                        Status
-                      </th>
-
-                      <th className="text-left px-5 py-4 text-sm font-semibold text-gray-600">
-                        Method
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {filteredAttendance.map(
-                      (record, index) => {
-                        const student =
-                          record.student || {};
-
-                        return (
-                          <tr
-                            key={
-                              record._id ||
-                              `${getStudentId(
-                                record.student
-                              )}-${record.date}-${index}`
-                            }
-                            className="border-b border-gray-100 hover:bg-gray-50 transition"
-                          >
-                            {/* STUDENT */}
-                            <td className="px-5 py-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold">
-                                  {student.name
-                                    ? student.name
-                                        .charAt(0)
-                                        .toUpperCase()
-                                    : "?"}
-                                </div>
-
-                                <span className="font-medium text-gray-800">
-                                  {student.name ||
-                                    "Unknown"}
-                                </span>
-                              </div>
-                            </td>
-
-                            {/* ROLL NUMBER */}
-                            <td className="px-5 py-4 text-gray-600">
-                              {student.rollNumber ||
-                                "-"}
-                            </td>
-
-                            {/* DEPARTMENT */}
-                            <td className="px-5 py-4 text-gray-600">
-                              {student.department ||
-                                "-"}
-                            </td>
-
-                            {/* DATE */}
-                            <td className="px-5 py-4 text-gray-600">
-                              {formatDate(record.date)}
-                            </td>
-
-                            {/* TIME */}
-                            <td className="px-5 py-4 text-gray-600">
-                              {formatTime(record.date)}
-                            </td>
-
-                            {/* STATUS */}
-                            <td className="px-5 py-4">
-                              {record.status ===
-                              "Present" ? (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                                  <FiCheckCircle
-                                    size={14}
-                                  />
-                                  Present
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
-                                  <FiXCircle
-                                    size={14}
-                                  />
-                                  Absent
-                                </span>
-                              )}
-                            </td>
-
-                            {/* METHOD */}
-                            <td className="px-5 py-4 text-gray-600">
-                              {record.markedBy ||
-                                "Face Recognition"}
-                            </td>
-                          </tr>
-                        );
-                      }
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <select
+              value={selectedStatus}
+              onChange={(e) =>
+                setSelectedStatus(e.target.value)
+              }
+              className="w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="All">All Status</option>
+              <option value="Present">Present</option>
+              <option value="Absent">Absent</option>
+            </select>
           </div>
         </div>
-      </main>
+
+        <div className="mt-3 flex justify-end sm:mt-4">
+          <button
+            onClick={resetFilters}
+            className="px-2 py-2 text-sm font-medium text-gray-600 transition hover:text-blue-600"
+          >
+            Clear Filters
+          </button>
+        </div>
+      </div>
+
+      {/* ======================================================
+          STATISTICS
+      ====================================================== */}
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:mb-6 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
+
+        {/* TOTAL */}
+        <div className="min-w-0 rounded-xl border border-gray-100 bg-white p-3 shadow-sm sm:p-5">
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-xs text-gray-500 sm:text-sm">
+                Total Records
+              </p>
+
+              <h3 className="mt-1 text-2xl font-bold text-gray-800 sm:mt-2 sm:text-3xl">
+                {reportStats.total}
+              </h3>
+            </div>
+
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 sm:h-12 sm:w-12">
+              <FiBarChart2
+                className="text-blue-600"
+                size={20}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* PRESENT */}
+        <div className="min-w-0 rounded-xl border border-gray-100 bg-white p-3 shadow-sm sm:p-5">
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-xs text-gray-500 sm:text-sm">
+                Present
+              </p>
+
+              <h3 className="mt-1 text-2xl font-bold text-green-600 sm:mt-2 sm:text-3xl">
+                {reportStats.present}
+              </h3>
+            </div>
+
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-50 sm:h-12 sm:w-12">
+              <FiCheckCircle
+                className="text-green-600"
+                size={20}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* ABSENT */}
+        <div className="min-w-0 rounded-xl border border-gray-100 bg-white p-3 shadow-sm sm:p-5">
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-xs text-gray-500 sm:text-sm">
+                Absent
+              </p>
+
+              <h3 className="mt-1 text-2xl font-bold text-red-600 sm:mt-2 sm:text-3xl">
+                {reportStats.absent}
+              </h3>
+            </div>
+
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 sm:h-12 sm:w-12">
+              <FiXCircle
+                className="text-red-600"
+                size={20}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* PERCENTAGE */}
+        <div className="min-w-0 rounded-xl border border-gray-100 bg-white p-3 shadow-sm sm:p-5">
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-xs text-gray-500 sm:text-sm">
+                Attendance Rate
+              </p>
+
+              <h3 className="mt-1 text-2xl font-bold text-purple-600 sm:mt-2 sm:text-3xl">
+                {reportStats.percentage}%
+              </h3>
+            </div>
+
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-50 sm:h-12 sm:w-12">
+              <FiUsers
+                className="text-purple-600"
+                size={20}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ======================================================
+          REPORT TABLE
+      ====================================================== */}
+      <div className="min-w-0 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+
+        <div className="flex flex-col gap-1 border-b border-gray-100 p-4 sm:p-5">
+          <h2 className="text-base font-semibold text-gray-800 sm:text-lg">
+            Attendance Report
+          </h2>
+
+          <p className="text-xs text-gray-500 sm:text-sm">
+            {filteredAttendance.length} record
+            {filteredAttendance.length !== 1 ? "s" : ""} found
+          </p>
+        </div>
+
+        {loading ? (
+          <div className="py-12 text-center text-sm text-gray-500 sm:py-16">
+            Loading report...
+          </div>
+        ) : filteredAttendance.length === 0 ? (
+          <div className="px-4 py-12 text-center sm:py-16">
+            <FiBarChart2
+              className="mx-auto text-gray-300"
+              size={42}
+            />
+
+            <p className="mt-3 text-sm text-gray-500">
+              No attendance records found
+            </p>
+
+            <button
+              onClick={resetFilters}
+              className="mt-4 text-sm font-medium text-blue-600 hover:text-blue-700"
+            >
+              Clear filters
+            </button>
+          </div>
+        ) : (
+          <div className="w-full overflow-x-auto">
+            <table className="w-full min-w-[850px]">
+
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-gray-600 sm:px-5 sm:py-4 sm:text-sm">
+                    Student
+                  </th>
+
+                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-gray-600 sm:px-5 sm:py-4 sm:text-sm">
+                    Roll Number
+                  </th>
+
+                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-gray-600 sm:px-5 sm:py-4 sm:text-sm">
+                    Department
+                  </th>
+
+                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-gray-600 sm:px-5 sm:py-4 sm:text-sm">
+                    Date
+                  </th>
+
+                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-gray-600 sm:px-5 sm:py-4 sm:text-sm">
+                    Time
+                  </th>
+
+                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-gray-600 sm:px-5 sm:py-4 sm:text-sm">
+                    Status
+                  </th>
+
+                  <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-gray-600 sm:px-5 sm:py-4 sm:text-sm">
+                    Method
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {filteredAttendance.map((record, index) => {
+                  const student = record.student || {};
+
+                  return (
+                    <tr
+                      key={
+                        record._id ||
+                        `${getStudentId(
+                          record.student
+                        )}-${record.date}-${index}`
+                      }
+                      className="border-b border-gray-100 transition hover:bg-gray-50"
+                    >
+                      {/* STUDENT */}
+                      <td className="px-4 py-3 sm:px-5 sm:py-4">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-600 sm:h-9 sm:w-9">
+                            {student.name
+                              ? student.name
+                                  .charAt(0)
+                                  .toUpperCase()
+                              : "?"}
+                          </div>
+
+                          <span className="whitespace-nowrap text-sm font-medium text-gray-800">
+                            {student.name || "Unknown"}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* ROLL NUMBER */}
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600 sm:px-5 sm:py-4">
+                        {student.rollNumber || "-"}
+                      </td>
+
+                      {/* DEPARTMENT */}
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600 sm:px-5 sm:py-4">
+                        {student.department || "-"}
+                      </td>
+
+                      {/* DATE */}
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600 sm:px-5 sm:py-4">
+                        {formatDate(record.date)}
+                      </td>
+
+                      {/* TIME */}
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600 sm:px-5 sm:py-4">
+                        {formatTime(record.date)}
+                      </td>
+
+                      {/* STATUS */}
+                      <td className="px-4 py-3 sm:px-5 sm:py-4">
+                        {record.status === "Present" ? (
+                          <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700 sm:px-3">
+                            <FiCheckCircle size={13} />
+                            Present
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 sm:px-3">
+                            <FiXCircle size={13} />
+                            Absent
+                          </span>
+                        )}
+                      </td>
+
+                      {/* METHOD */}
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600 sm:px-5 sm:py-4">
+                        {record.markedBy || "Face Recognition"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

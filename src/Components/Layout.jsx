@@ -8,7 +8,7 @@ const Layout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-50">
 
       {/* SIDEBAR */}
       <Sidebar
@@ -17,15 +17,15 @@ const Layout = () => {
       />
 
       {/* MAIN CONTENT */}
-      <main className="min-h-screen md:ml-64">
+      <main className="min-h-screen min-w-0 max-w-full overflow-x-hidden md:ml-64">
 
         {/* NAVBAR */}
         <Navbar
           setMobileOpen={setMobileOpen}
         />
 
-        {/* PAGE */}
-        <div className="p-4 sm:p-6">
+        {/* PAGE CONTENT */}
+        <div className="min-w-0 max-w-full p-4 sm:p-6">
           <Outlet />
         </div>
 
