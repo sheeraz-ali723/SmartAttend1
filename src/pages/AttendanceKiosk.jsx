@@ -219,7 +219,7 @@ const AttendanceKiosk = () => {
 
       const response =
         await fetch(
-          "http://localhost:5000/api/attendance/kiosk-recognize",
+          "http://railway-up-production-d063.up.railway.app/api/attendance/kiosk-recognize",
           {
             method: "POST",
 

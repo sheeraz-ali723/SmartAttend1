@@ -19,7 +19,7 @@ import {
   loadFaceModels,
 } from "../utils/faceRecognition";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "http://railway-up-production-d063.up.railway.app";
 
 const initialForm = {
   name: "",

@@ -66,7 +66,7 @@ const Attendance = () => {
   const fetchStudents = async () => {
     try {
       const response = await fetch(
-        "http://localhost:5000/api/students"
+        "http://railway-up-production-d063.up.railway.app/api/students"
       );
 
       if (!response.ok) {
@@ -91,7 +91,7 @@ const Attendance = () => {
   const fetchClasses = async () => {
     try {
       const response = await fetch(
-        "http://localhost:5000/api/classes"
+        "http://railway-up-production-d063.up.railway.app/api/classes"
       );
 
       if (!response.ok) {
@@ -116,7 +116,7 @@ const Attendance = () => {
   const fetchTodayAttendance = async (className = selectedClass) => {
     try {
       let url =
-        "http://localhost:5000/api/attendance/today";
+        "http://railway-up-production-d063.up.railway.app/api/attendance/today";
 
       if (className && className !== "All Classes") {
         url += `?className=${encodeURIComponent(className)}`;
@@ -427,7 +427,7 @@ const Attendance = () => {
       // MARK ATTENDANCE
       // ==================================================
       const response = await fetch(
-        "http://localhost:5000/api/attendance/mark",
+        "http://railway-up-production-d063.up.railway.app/api/attendance/mark",
         {
           method: "POST",
           headers: {
@@ -538,7 +538,7 @@ const Attendance = () => {
       setMessage("");
 
       const response = await fetch(
-        "http://localhost:5000/api/attendance/mark-absent",
+        "http://railway-up-production-d063.up.railway.app/api/attendance/mark-absent",
         {
           method: "POST",
           headers: {
@@ -606,7 +606,7 @@ const Attendance = () => {
       setMessage("");
 
       const response = await fetch(
-        "http://localhost:5000/api/attendance/generate-today",
+        "http://railway-up-production-d063.up.railway.app/api/attendance/generate-today",
         {
           method: "POST",
           headers: {

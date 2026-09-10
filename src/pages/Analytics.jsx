@@ -23,9 +23,9 @@ const Analytics = () => {
       setLoading(true);
 
       const [studentsRes, attendanceRes, todayRes] = await Promise.all([
-        fetch("http://localhost:5000/api/students"),
-        fetch("http://localhost:5000/api/attendance"),
-        fetch("http://localhost:5000/api/attendance/today"),
+        fetch("http://railway-up-production-d063.up.railway.app/api/students"),
+        fetch("http://railway-up-production-d063.up.railway.app/api/attendance"),
+        fetch("http://railway-up-production-d063.up.railway.app/api/attendance/today"),
       ]);
 
       const studentsData = await studentsRes.json();

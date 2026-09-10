@@ -32,19 +32,19 @@ const Dashboard = () => {
           todayAttendanceResponse,
         ] = await Promise.all([
           fetch(
-            "http://localhost:5000/api/students",
+            "http://railway-up-production-d063.up.railway.app/api/students",
             {
               headers,
             }
           ),
           fetch(
-            "http://localhost:5000/api/attendance",
+            "http://railway-up-production-d063.up.railway.app/api/attendance",
             {
               headers,
             }
           ),
           fetch(
-            "http://localhost:5000/api/attendance/today",
+            "http://railway-up-production-d063.up.railway.app/api/attendance/today",
             {
               headers,
             }

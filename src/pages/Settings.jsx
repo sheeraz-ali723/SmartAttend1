@@ -50,7 +50,7 @@ const Settings = () => {
         }
 
         const response = await fetch(
-          "http://localhost:5000/api/auth/profile",
+          "http://railway-up-production-d063.up.railway.app/api/auth/profile",
           {
             method: "GET",
             headers: {
@@ -233,7 +233,7 @@ const Settings = () => {
       }
 
       const response = await fetch(
-        "http://localhost:5000/api/auth/profile",
+        "http://railway-up-production-d063.up.railway.app/api/auth/profile",
         {
           method: "PUT",
           headers: {

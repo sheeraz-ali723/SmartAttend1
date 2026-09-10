@@ -4,7 +4,7 @@ import Dashboard from "./pages/Dashboard";
 import Students from "./pages/Students";
 import Attendance from "./pages/Attendance";
 import AttendanceHistory from "./pages/AttendanceHistory";
-import AttendanceTest from "./pages/attendanceTest";
+import AttendanceTest from "./pages/AttendanceTest";
 import AttendanceKiosk from "./pages/AttendanceKiosk";
 import Reports from "./pages/Reports";
 import Analytics from "./pages/Analytics";
