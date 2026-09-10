@@ -4,6 +4,8 @@ import {
   FiEdit2,
   FiTrash2,
   FiCamera,
+  FiVideo,
+  FiVideoOff,
   FiX,
   FiCheckCircle,
   FiXCircle,
@@ -39,9 +41,7 @@ const Students = () => {
   // ATTENDANCE
   // ======================================================
 
-  const [todayAttendance, setTodayAttendance] =
-    useState([]);
-
+  const [todayAttendance, setTodayAttendance] = useState([]);
   const [markingAttendance, setMarkingAttendance] =
     useState(null);
 
@@ -51,16 +51,13 @@ const Students = () => {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [registeringFace, setRegisteringFace] =
-    useState(null);
 
   // ======================================================
   // SEARCH / FILTER
   // ======================================================
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedClass, setSelectedClass] =
-    useState("All");
+  const [selectedClass, setSelectedClass] = useState("All");
   const [selectedDepartment, setSelectedDepartment] =
     useState("All");
 
@@ -69,11 +66,9 @@ const Students = () => {
   // ======================================================
 
   const [showModal, setShowModal] = useState(false);
-  const [editingStudent, setEditingStudent] =
-    useState(null);
+  const [editingStudent, setEditingStudent] = useState(null);
 
-  const [formData, setFormData] =
-    useState(initialForm);
+  const [formData, setFormData] = useState(initialForm);
 
   // ======================================================
   // MESSAGES
@@ -89,8 +84,17 @@ const Students = () => {
   const faceVideoRef = useRef(null);
   const faceStreamRef = useRef(null);
 
+  const [faceCameraActive, setFaceCameraActive] =
+    useState(false);
+
+  const [faceCaptured, setFaceCaptured] = useState(false);
+
+  const [faceDescriptor, setFaceDescriptor] = useState(null);
+
+  const [faceLoading, setFaceLoading] = useState(false);
+
   // ======================================================
-  // SHOW SUCCESS
+  // SUCCESS MESSAGE
   // ======================================================
 
   const showSuccess = (message) => {
@@ -119,8 +123,7 @@ const Students = () => {
 
       if (!response.ok) {
         throw new Error(
-          data.message ||
-            "Failed to fetch students."
+          data.message || "Failed to fetch students."
         );
       }
 
@@ -130,14 +133,10 @@ const Students = () => {
 
       setStudents(studentList);
     } catch (error) {
-      console.error(
-        "Fetch students error:",
-        error
-      );
+      console.error("Fetch students error:", error);
 
       setError(
-        error.message ||
-          "Unable to load students."
+        error.message || "Unable to load students."
       );
     } finally {
       setLoading(false);
@@ -166,10 +165,7 @@ const Students = () => {
 
       setClasses(classList);
     } catch (error) {
-      console.error(
-        "Fetch classes error:",
-        error
-      );
+      console.error("Fetch classes error:", error);
     }
   };
 
@@ -193,9 +189,7 @@ const Students = () => {
       }
 
       setTodayAttendance(
-        Array.isArray(data)
-          ? data
-          : []
+        Array.isArray(data) ? data : []
       );
     } catch (error) {
       console.error(
@@ -230,15 +224,16 @@ const Students = () => {
   // ======================================================
 
   const handleChange = (event) => {
-    const {
-      name,
-      value,
-    } = event.target;
+    const { name, value } = event.target;
 
     setFormData((previous) => ({
       ...previous,
       [name]: value,
     }));
+
+    if (error) {
+      setError("");
+    }
   };
 
   // ======================================================
@@ -246,8 +241,15 @@ const Students = () => {
   // ======================================================
 
   const openAddModal = () => {
+    stopFaceCamera();
+
     setEditingStudent(null);
     setFormData(initialForm);
+
+    setFaceCaptured(false);
+    setFaceDescriptor(null);
+    setFaceCameraActive(false);
+    setFaceLoading(false);
 
     setError("");
     setSuccess("");
@@ -260,19 +262,22 @@ const Students = () => {
   // ======================================================
 
   const openEditModal = (student) => {
+    stopFaceCamera();
+
     setEditingStudent(student);
 
     setFormData({
       name: student.name || "",
-      rollNumber:
-        student.rollNumber || "",
-      email:
-        student.email || "",
-      department:
-        student.department || "",
-      className:
-        student.className || "",
+      rollNumber: student.rollNumber || "",
+      email: student.email || "",
+      department: student.department || "",
+      className: student.className || "",
     });
+
+    setFaceCaptured(false);
+    setFaceDescriptor(null);
+    setFaceCameraActive(false);
+    setFaceLoading(false);
 
     setError("");
     setSuccess("");
@@ -289,10 +294,192 @@ const Students = () => {
       return;
     }
 
+    stopFaceCamera();
+
     setShowModal(false);
     setEditingStudent(null);
     setFormData(initialForm);
+
+    setFaceCaptured(false);
+    setFaceDescriptor(null);
+    setFaceCameraActive(false);
+    setFaceLoading(false);
+
     setError("");
+  };
+
+  // ======================================================
+  // OPEN CAMERA
+  // ======================================================
+
+  const openCamera = async () => {
+    try {
+      setError("");
+      setSuccess("");
+      setFaceLoading(true);
+
+      // Load face recognition models first
+      await loadFaceModels();
+
+      // Stop any previous camera
+      if (faceStreamRef.current) {
+        faceStreamRef.current
+          .getTracks()
+          .forEach((track) => track.stop());
+
+        faceStreamRef.current = null;
+      }
+
+      if (!faceVideoRef.current) {
+        throw new Error(
+          "Camera video is not ready."
+        );
+      }
+
+      // Request camera permission
+      const stream =
+        await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            width: {
+              ideal: 640,
+            },
+            height: {
+              ideal: 480,
+            },
+          },
+          audio: false,
+        });
+
+      faceStreamRef.current = stream;
+
+      const video = faceVideoRef.current;
+
+      video.srcObject = stream;
+      video.muted = true;
+      video.autoplay = true;
+      video.playsInline = true;
+
+      await video.play();
+
+      setFaceCameraActive(true);
+    } catch (error) {
+      console.error(
+        "Open camera error:",
+        error
+      );
+
+      setFaceCameraActive(false);
+
+      setError(
+        error.message ||
+          "Unable to open camera. Please allow camera permission."
+      );
+    } finally {
+      setFaceLoading(false);
+    }
+  };
+
+  // ======================================================
+  // STOP CAMERA
+  // ======================================================
+
+  const stopFaceCamera = () => {
+    if (faceStreamRef.current) {
+      faceStreamRef.current
+        .getTracks()
+        .forEach((track) => {
+          track.stop();
+        });
+
+      faceStreamRef.current = null;
+    }
+
+    if (faceVideoRef.current) {
+      faceVideoRef.current.pause();
+      faceVideoRef.current.srcObject = null;
+    }
+
+    setFaceCameraActive(false);
+  };
+
+  // ======================================================
+  // CAPTURE FACE
+  // ======================================================
+
+// ======================================================
+// CAPTURE FACE
+// ======================================================
+
+const captureFace = async () => {
+  try {
+    setError("");
+    setSuccess("");
+
+    if (!faceCameraActive) {
+      setError("Please open the camera first.");
+      return;
+    }
+
+    if (!faceVideoRef.current) {
+      setError("Camera video is not ready.");
+      return;
+    }
+
+    setFaceLoading(true);
+
+    // Give camera a moment to provide a clear frame
+    await new Promise((resolve) =>
+      setTimeout(resolve, 500)
+    );
+
+    const descriptor = await getFaceDescriptor(
+      faceVideoRef.current
+    );
+
+    if (!descriptor || descriptor.length !== 128) {
+      throw new Error(
+        "No clear face detected. Please look directly at the camera."
+      );
+    }
+
+    // Save face descriptor
+    setFaceDescriptor(Array.from(descriptor));
+
+    // Mark face as captured
+    setFaceCaptured(true);
+
+    // Automatically stop camera
+    stopFaceCamera();
+
+    setSuccess("Face captured successfully. Camera stopped.");
+  } catch (error) {
+    console.error("Capture face error:", error);
+
+    setFaceCaptured(false);
+    setFaceDescriptor(null);
+
+    setError(
+      error.message || "Unable to capture face."
+    );
+  } finally {
+    setFaceLoading(false);
+  }
+};
+
+  // ======================================================
+  // CAPTURE AGAIN
+  // ======================================================
+
+  const captureFaceAgain = () => {
+    setFaceCaptured(false);
+    setFaceDescriptor(null);
+    setError("");
+    setSuccess("");
+
+    if (!faceCameraActive) {
+      openCamera();
+    }
   };
 
   // ======================================================
@@ -301,6 +488,10 @@ const Students = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+
+    // --------------------------------------------------
+    // VALIDATION
+    // --------------------------------------------------
 
     if (!formData.name.trim()) {
       setError(
@@ -337,6 +528,30 @@ const Students = () => {
       return;
     }
 
+    // --------------------------------------------------
+    // FACE REQUIRED FOR NEW STUDENT
+    // --------------------------------------------------
+
+    if (!editingStudent) {
+      if (!faceCaptured) {
+        setError(
+          "Please capture the student's face before adding the student."
+        );
+        return;
+      }
+
+      if (!faceDescriptor) {
+        setError(
+          "Face registration is incomplete. Please capture the face again."
+        );
+        return;
+      }
+    }
+
+    // --------------------------------------------------
+    // SAVE STUDENT
+    // --------------------------------------------------
+
     try {
       setSaving(true);
       setError("");
@@ -349,6 +564,23 @@ const Students = () => {
         ? "PUT"
         : "POST";
 
+      /*
+        New student:
+        Send student information + faceId together.
+
+        Edit student:
+        Send normal student information.
+      */
+
+      const body = editingStudent
+        ? formData
+        : {
+            ...formData,
+            faceId: JSON.stringify(
+              faceDescriptor
+            ),
+          };
+
       const response = await fetch(
         url,
         {
@@ -357,9 +589,7 @@ const Students = () => {
             "Content-Type":
               "application/json",
           },
-          body: JSON.stringify(
-            formData
-          ),
+          body: JSON.stringify(body),
         }
       );
 
@@ -373,15 +603,23 @@ const Students = () => {
         );
       }
 
-      showSuccess(
-        editingStudent
-          ? "Student updated successfully."
-          : "Student added successfully."
-      );
+      // Stop camera
+      stopFaceCamera();
 
+      // Reset face
+      setFaceCaptured(false);
+      setFaceDescriptor(null);
+
+      // Close modal
       setShowModal(false);
       setEditingStudent(null);
       setFormData(initialForm);
+
+      showSuccess(
+        editingStudent
+          ? "Student updated successfully."
+          : "Student and face registered successfully."
+      );
 
       await fetchStudents();
     } catch (error) {
@@ -403,13 +641,9 @@ const Students = () => {
   // DELETE STUDENT
   // ======================================================
 
-  const deleteStudent = async (
-    student
-  ) => {
+  const deleteStudent = async (student) => {
     if (!student?._id) {
-      alert(
-        "Student ID is missing."
-      );
+      alert("Student ID is missing.");
       return;
     }
 
@@ -460,19 +694,19 @@ const Students = () => {
   };
 
   // ======================================================
-  // GET CURRENT ATTENDANCE
+  // GET STUDENT ATTENDANCE
   // ======================================================
 
-  const getStudentAttendance =
-    (studentId) => {
-      return todayAttendance.find(
-        (record) =>
-          record.student?._id ===
-            studentId ||
-          record.student ===
-            studentId
-      );
-    };
+  const getStudentAttendance = (
+    studentId
+  ) => {
+    return todayAttendance.find(
+      (record) =>
+        record.student?._id ===
+          studentId ||
+        record.student === studentId
+    );
+  };
 
   // ======================================================
   // TOGGLE ATTENDANCE
@@ -482,9 +716,7 @@ const Students = () => {
     student
   ) => {
     if (!student?._id) {
-      alert(
-        "Student ID is missing."
-      );
+      alert("Student ID is missing.");
       return;
     }
 
@@ -520,12 +752,10 @@ const Students = () => {
           `${API_URL}/api/attendance/mark-${newStatus.toLowerCase()}`,
           {
             method: "POST",
-
             headers: {
               "Content-Type":
                 "application/json",
             },
-
             body: JSON.stringify({
               studentId:
                 student._id,
@@ -535,11 +765,6 @@ const Students = () => {
 
       const data =
         await response.json();
-
-      console.log(
-        "Toggle attendance response:",
-        data
-      );
 
       if (!response.ok) {
         throw new Error(
@@ -570,226 +795,37 @@ const Students = () => {
   };
 
   // ======================================================
-  // START FACE CAMERA
-  // ======================================================
-
-  const startFaceCamera = async () => {
-    try {
-      await loadFaceModels();
-
-      const stream =
-        await navigator.mediaDevices.getUserMedia(
-          {
-            video: {
-              facingMode:
-                "user",
-
-              width: {
-                ideal: 640,
-              },
-
-              height: {
-                ideal: 480,
-              },
-            },
-
-            audio: false,
-          }
-        );
-
-      faceStreamRef.current =
-        stream;
-
-      if (
-        faceVideoRef.current
-      ) {
-        faceVideoRef.current.srcObject =
-          stream;
-
-        await faceVideoRef.current.play();
-      }
-    } catch (error) {
-      console.error(
-        "Face camera error:",
-        error
-      );
-
-      throw new Error(
-        "Unable to access the camera."
-      );
-    }
-  };
-
-  // ======================================================
-  // STOP FACE CAMERA
-  // ======================================================
-
-  const stopFaceCamera = () => {
-    if (faceStreamRef.current) {
-      faceStreamRef.current
-        .getTracks()
-        .forEach((track) =>
-          track.stop()
-        );
-
-      faceStreamRef.current =
-        null;
-    }
-
-    if (
-      faceVideoRef.current
-    ) {
-      faceVideoRef.current.srcObject =
-        null;
-    }
-  };
-
-  // ======================================================
-  // REGISTER FACE
-  // ======================================================
-
-  const registerFace = async (
-    student
-  ) => {
-    if (!student?._id) {
-      alert(
-        "Student ID is missing."
-      );
-      return;
-    }
-
-    try {
-      setRegisteringFace(
-        student._id
-      );
-
-      await startFaceCamera();
-
-      await new Promise(
-        (resolve) =>
-          setTimeout(
-            resolve,
-            1000
-          )
-      );
-
-      const descriptor =
-        await getFaceDescriptor(
-          faceVideoRef.current
-        );
-
-      if (
-        !descriptor ||
-        descriptor.length !== 128
-      ) {
-        throw new Error(
-          "Invalid face descriptor."
-        );
-      }
-
-      const confirmed =
-        window.confirm(
-          `Use this face for "${student.name}"?`
-        );
-
-      if (!confirmed) {
-        stopFaceCamera();
-        return;
-      }
-
-      const response =
-        await fetch(
-          `${API_URL}/api/students/${student._id}`,
-          {
-            method: "PUT",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body: JSON.stringify({
-              faceId:
-                JSON.stringify(
-                  Array.from(
-                    descriptor
-                  )
-                ),
-            }),
-          }
-        );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            "Failed to register face."
-        );
-      }
-
-      stopFaceCamera();
-
-      showSuccess(
-        `${student.name}'s face registered successfully.`
-      );
-
-      await fetchStudents();
-    } catch (error) {
-      console.error(
-        "Register face error:",
-        error
-      );
-
-      stopFaceCamera();
-
-      alert(
-        error.message ||
-          "Failed to register face."
-      );
-    } finally {
-      setRegisteringFace(null);
-    }
-  };
-
-  // ======================================================
   // CLASS OPTIONS
   // ======================================================
 
-  const classOptions =
-    useMemo(() => {
-      const studentClasses =
-        students
-          .map(
-            (student) =>
-              student.className
-          )
-          .filter(Boolean);
+  const classOptions = useMemo(() => {
+    const studentClasses =
+      students
+        .map(
+          (student) =>
+            student.className
+        )
+        .filter(Boolean);
 
-      const apiClasses =
-        classes
-          .map((item) =>
-            typeof item ===
-            "string"
-              ? item
-              : item.name
-          )
-          .filter(Boolean);
+    const apiClasses =
+      classes
+        .map((item) =>
+          typeof item === "string"
+            ? item
+            : item.name
+        )
+        .filter(Boolean);
 
-      return [
-        "All",
-        ...Array.from(
-          new Set([
-            ...apiClasses,
-            ...studentClasses,
-          ])
-        ),
-      ];
-    }, [
-      classes,
-      students,
-    ]);
+    return [
+      "All",
+      ...Array.from(
+        new Set([
+          ...apiClasses,
+          ...studentClasses,
+        ])
+      ),
+    ];
+  }, [classes, students]);
 
   // ======================================================
   // DEPARTMENT OPTIONS
@@ -951,13 +987,10 @@ const Students = () => {
 
             <button
               type="button"
-              onClick={
-                openAddModal
-              }
+              onClick={openAddModal}
               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
             >
               <FiPlus size={18} />
-
               Add Student
             </button>
 
@@ -969,7 +1002,7 @@ const Students = () => {
             MESSAGES
         ================================================== */}
 
-        {error && (
+        {error && !showModal && (
           <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
             {error}
           </div>
@@ -986,6 +1019,8 @@ const Students = () => {
         ================================================== */}
 
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+
+          {/* TOTAL */}
 
           <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
 
@@ -1009,6 +1044,8 @@ const Students = () => {
 
           </div>
 
+          {/* PRESENT */}
+
           <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
 
             <div className="flex items-center justify-between">
@@ -1024,14 +1061,14 @@ const Students = () => {
               </div>
 
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-50 text-green-600">
-                <FiCheckCircle
-                  size={23}
-                />
+                <FiCheckCircle size={23} />
               </div>
 
             </div>
 
           </div>
+
+          {/* ABSENT */}
 
           <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
 
@@ -1048,14 +1085,14 @@ const Students = () => {
               </div>
 
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 text-red-600">
-                <FiXCircle
-                  size={23}
-                />
+                <FiXCircle size={23} />
               </div>
 
             </div>
 
           </div>
+
+          {/* REGISTERED FACES */}
 
           <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
 
@@ -1072,14 +1109,14 @@ const Students = () => {
               </div>
 
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
-                <FiCamera
-                  size={23}
-                />
+                <FiCamera size={23} />
               </div>
 
             </div>
 
           </div>
+
+          {/* WITHOUT FACE */}
 
           <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
 
@@ -1096,9 +1133,7 @@ const Students = () => {
               </div>
 
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
-                <FiXCircle
-                  size={23}
-                />
+                <FiXCircle size={23} />
               </div>
 
             </div>
@@ -1155,8 +1190,7 @@ const Students = () => {
                     key={className}
                     value={className}
                   >
-                    {className ===
-                    "All"
+                    {className === "All"
                       ? "All Classes"
                       : className}
                   </option>
@@ -1183,8 +1217,7 @@ const Students = () => {
                     key={department}
                     value={department}
                   >
-                    {department ===
-                    "All"
+                    {department === "All"
                       ? "All Departments"
                       : department}
                   </option>
@@ -1195,19 +1228,15 @@ const Students = () => {
           </div>
 
           <div className="mt-4 text-sm text-gray-500">
-
             Showing{" "}
             <span className="font-semibold text-gray-800">
-              {
-                filteredStudents.length
-              }
+              {filteredStudents.length}
             </span>{" "}
             of{" "}
             <span className="font-semibold text-gray-800">
               {students.length}
             </span>{" "}
             students
-
           </div>
 
         </div>
@@ -1232,8 +1261,7 @@ const Students = () => {
               </div>
 
             </div>
-          ) : filteredStudents.length ===
-            0 ? (
+          ) : filteredStudents.length === 0 ? (
             <div className="flex min-h-[300px] items-center justify-center">
 
               <div className="text-center">
@@ -1256,7 +1284,7 @@ const Students = () => {
           ) : (
             <div className="overflow-x-auto">
 
-              <table className="w-full min-w-[1250px]">
+              <table className="w-full min-w-[1050px]">
 
                 <thead className="border-b border-gray-200 bg-gray-50">
 
@@ -1287,10 +1315,6 @@ const Students = () => {
                     </th>
 
                     <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                      Face
-                    </th>
-
-                    <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                       Attendance
                     </th>
 
@@ -1305,10 +1329,7 @@ const Students = () => {
                 <tbody className="divide-y divide-gray-100">
 
                   {filteredStudents.map(
-                    (
-                      student,
-                      index
-                    ) => {
+                    (student, index) => {
 
                       const attendanceRecord =
                         getStudentAttendance(
@@ -1407,28 +1428,6 @@ const Students = () => {
 
                           </td>
 
-                          {/* FACE */}
-
-                          <td className="px-5 py-4">
-
-                            {student.faceId ? (
-                              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-600">
-                                <FiCheckCircle
-                                  size={13}
-                                />
-                                Registered
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-600">
-                                <FiXCircle
-                                  size={13}
-                                />
-                                Not Registered
-                              </span>
-                            )}
-
-                          </td>
-
                           {/* ATTENDANCE */}
 
                           <td className="px-5 py-4">
@@ -1497,7 +1496,7 @@ const Students = () => {
 
                           <td className="px-5 py-4">
 
-                            <div className="flex min-w-[360px] flex-wrap gap-2">
+                            <div className="flex gap-2">
 
                               {/* EDIT */}
 
@@ -1533,33 +1532,6 @@ const Students = () => {
                                 Delete
                               </button>
 
-                              {/* REGISTER FACE */}
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  registerFace(
-                                    student
-                                  )
-                                }
-                                disabled={
-                                  registeringFace ===
-                                  student._id
-                                }
-                                className="inline-flex items-center gap-1.5 rounded-lg bg-purple-50 px-3 py-2 text-xs font-semibold text-purple-600 transition hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                <FiCamera
-                                  size={14}
-                                />
-
-                                {registeringFace ===
-                                student._id
-                                  ? "Registering..."
-                                  : student.faceId
-                                  ? "Re-register Face"
-                                  : "Register Face"}
-                              </button>
-
                             </div>
 
                           </td>
@@ -1587,7 +1559,7 @@ const Students = () => {
       {showModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
 
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+          <div className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
 
             {/* HEADER */}
 
@@ -1604,17 +1576,16 @@ const Students = () => {
                 <p className="mt-1 text-sm text-gray-500">
                   {editingStudent
                     ? "Update student information."
-                    : "Add a new student to SmartAttend."}
+                    : "Add student information and register the face."}
                 </p>
 
               </div>
 
               <button
                 type="button"
-                onClick={
-                  closeModal
-                }
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100"
+                onClick={closeModal}
+                disabled={saving}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100 disabled:opacity-50"
               >
                 <FiX size={20} />
               </button>
@@ -1624,9 +1595,7 @@ const Students = () => {
             {/* FORM */}
 
             <form
-              onSubmit={
-                handleSubmit
-              }
+              onSubmit={handleSubmit}
               className="p-6"
             >
 
@@ -1643,19 +1612,16 @@ const Students = () => {
                   <input
                     type="text"
                     name="name"
-                    value={
-                      formData.name
-                    }
-                    onChange={
-                      handleChange
-                    }
+                    value={formData.name}
+                    onChange={handleChange}
                     placeholder="Enter student name"
-                    className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    disabled={saving}
+                    className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100"
                   />
 
                 </div>
 
-                {/* ROLL */}
+                {/* ROLL NUMBER */}
 
                 <div>
 
@@ -1669,11 +1635,10 @@ const Students = () => {
                     value={
                       formData.rollNumber
                     }
-                    onChange={
-                      handleChange
-                    }
+                    onChange={handleChange}
                     placeholder="Enter roll number"
-                    className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    disabled={saving}
+                    className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100"
                   />
 
                 </div>
@@ -1692,11 +1657,10 @@ const Students = () => {
                     value={
                       formData.email
                     }
-                    onChange={
-                      handleChange
-                    }
+                    onChange={handleChange}
                     placeholder="student@example.com"
-                    className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    disabled={saving}
+                    className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100"
                   />
 
                 </div>
@@ -1715,11 +1679,10 @@ const Students = () => {
                     value={
                       formData.department
                     }
-                    onChange={
-                      handleChange
-                    }
+                    onChange={handleChange}
                     placeholder="Computer Science"
-                    className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    disabled={saving}
+                    className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100"
                   />
 
                 </div>
@@ -1737,10 +1700,9 @@ const Students = () => {
                     value={
                       formData.className
                     }
-                    onChange={
-                      handleChange
-                    }
-                    className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    onChange={handleChange}
+                    disabled={saving}
+                    className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100"
                   >
 
                     <option value="">
@@ -1754,9 +1716,7 @@ const Students = () => {
                           "All"
                       )
                       .map(
-                        (
-                          className
-                        ) => (
+                        (className) => (
                           <option
                             key={
                               className
@@ -1778,100 +1738,315 @@ const Students = () => {
 
               </div>
 
+              {/* ==================================================
+                  FACE RECOGNITION
+              ================================================== */}
+
+              {!editingStudent && (
+                <div className="mt-6 rounded-xl border border-purple-100 bg-purple-50 p-4">
+
+                  {/* FACE HEADER */}
+
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+                    <div>
+
+                      <div className="flex items-center gap-2">
+
+                        <FiCamera
+                          size={18}
+                          className="text-purple-600"
+                        />
+
+                        <h3 className="text-sm font-bold text-gray-900">
+                          Face Recognition
+                        </h3>
+
+                      </div>
+
+                      <p className="mt-1 text-xs text-gray-500">
+                        Open the camera, position the student's face, then capture it.
+                      </p>
+
+                    </div>
+
+                    {faceCaptured && (
+                      <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+
+                        <FiCheckCircle
+                          size={14}
+                        />
+
+                        Face Captured
+
+                      </span>
+                    )}
+
+                  </div>
+
+                  {/* CAMERA VIEW */}
+
+                  <div className="relative overflow-hidden rounded-xl bg-black">
+
+                    <video
+                      ref={faceVideoRef}
+                      autoPlay
+                      muted
+                      playsInline
+                      className={`aspect-video w-full object-cover ${
+                        faceCameraActive
+                          ? "block"
+                          : "hidden"
+                      }`}
+                    />
+
+                    {!faceCameraActive && (
+                      <div className="flex aspect-video items-center justify-center px-4 text-center text-white">
+
+                        <div>
+
+                          <FiCamera
+                            size={45}
+                            className="mx-auto mb-3 opacity-70"
+                          />
+
+                          <p className="text-sm font-medium">
+                            Camera is closed
+                          </p>
+
+                          <p className="mt-1 text-xs text-gray-400">
+                            Click "Open Camera" to start.
+                          </p>
+
+                        </div>
+
+                      </div>
+                    )}
+
+                    {/* CAMERA STATUS */}
+
+                    <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full bg-black/60 px-3 py-1.5 text-xs text-white backdrop-blur">
+
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          faceCameraActive
+                            ? "bg-green-400"
+                            : "bg-gray-400"
+                        }`}
+                      />
+
+                      {faceCameraActive
+                        ? "Camera active"
+                        : "Camera stopped"}
+
+                    </div>
+
+                  </div>
+
+                  {/* CAMERA BUTTONS */}
+
+                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+                    {/* OPEN CAMERA */}
+
+                    <button
+                      type="button"
+                      onClick={openCamera}
+                      disabled={
+                        faceCameraActive ||
+                        faceLoading ||
+                        saving
+                      }
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+
+                      <FiVideo
+                        size={18}
+                      />
+
+                      {faceLoading
+                        ? "Opening Camera..."
+                        : "Open Camera"}
+
+                    </button>
+
+                    {/* STOP CAMERA */}
+
+                    <button
+                      type="button"
+                      onClick={
+                        stopFaceCamera
+                      }
+                      disabled={
+                        !faceCameraActive ||
+                        faceLoading ||
+                        saving
+                      }
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+
+                      <FiVideoOff
+                        size={18}
+                      />
+
+                      Stop Camera
+
+                    </button>
+
+                  </div>
+
+                  {/* CAPTURE BUTTON */}
+
+                  <div className="mt-3">
+
+                    <button
+                      type="button"
+                      onClick={
+                        captureFace
+                      }
+                      disabled={
+                        !faceCameraActive ||
+                        faceLoading ||
+                        faceCaptured ||
+                        saving
+                      }
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+
+                      <FiCamera
+                        size={18}
+                      />
+
+                      {faceLoading
+                        ? "Recognizing Face..."
+                        : faceCaptured
+                        ? "Face Captured ✓"
+                        : "Capture Face"}
+
+                    </button>
+
+                  </div>
+
+                  {/* CAPTURE AGAIN */}
+
+                  {faceCaptured && (
+                    <button
+                      type="button"
+                      onClick={
+                        captureFaceAgain
+                      }
+                      disabled={
+                        faceLoading ||
+                        saving
+                      }
+                      className="mt-3 w-full rounded-lg border border-purple-200 bg-white px-4 py-3 text-sm font-semibold text-purple-600 transition hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Capture Face Again
+                    </button>
+                  )}
+
+                  {/* INSTRUCTIONS */}
+
+                  <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-700">
+
+                    <strong>
+                      Instructions:
+                    </strong>{" "}
+                    Click Open Camera first. Keep the student's face centered and clearly visible. Look directly at the camera and click Capture Face.
+
+                  </div>
+
+                </div>
+              )}
+
+              {/* ==================================================
+                  EDIT MODE FACE INFORMATION
+              ================================================== */}
+
+              {editingStudent && (
+                <div className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
+
+                  <div className="flex items-center gap-3">
+
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100 text-purple-600">
+                      <FiCamera
+                        size={20}
+                      />
+                    </div>
+
+                    <div>
+
+                      <h3 className="text-sm font-bold text-gray-900">
+                        Face Recognition
+                      </h3>
+
+                      <p className="mt-1 text-xs text-gray-500">
+                        Face registration is completed when the student is added.
+                      </p>
+
+                    </div>
+
+                  </div>
+
+                </div>
+              )}
+
+              {/* ==================================================
+                  ERROR
+              ================================================== */}
+
               {error && (
                 <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   {error}
                 </div>
               )}
 
+              {/* ==================================================
+                  SUCCESS
+              ================================================== */}
+
+              {success && (
+                <div className="mt-5 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                  {success}
+                </div>
+              )}
+
+              {/* ==================================================
+                  FORM BUTTONS
+              ================================================== */}
+
               <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
 
                 <button
                   type="button"
-                  onClick={
-                    closeModal
-                  }
+                  onClick={closeModal}
                   disabled={saving}
-                  className="rounded-lg border border-gray-200 px-5 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  className="rounded-lg border border-gray-200 px-5 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Cancel
                 </button>
 
                 <button
                   type="submit"
-                  disabled={saving}
-                  className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={
+                    saving ||
+                    (!editingStudent &&
+                      !faceCaptured)
+                  }
+                  className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
+
                   {saving
                     ? "Saving..."
                     : editingStudent
                     ? "Update Student"
                     : "Add Student"}
+
                 </button>
 
               </div>
 
             </form>
-
-          </div>
-
-        </div>
-      )}
-
-      {/* ====================================================
-          FACE REGISTRATION MODAL
-      ==================================================== */}
-
-      {registeringFace && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
-
-            <div className="mb-4 flex items-center justify-between">
-
-              <div>
-
-                <h2 className="text-xl font-bold text-gray-900">
-                  Register Face
-                </h2>
-
-                <p className="mt-1 text-sm text-gray-500">
-                  Look directly at the camera.
-                </p>
-
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  stopFaceCamera();
-
-                  setRegisteringFace(
-                    null
-                  );
-                }}
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100"
-              >
-                <FiX size={20} />
-              </button>
-
-            </div>
-
-            <div className="overflow-hidden rounded-xl bg-black">
-
-              <video
-                ref={faceVideoRef}
-                autoPlay
-                muted
-                playsInline
-                className="aspect-video w-full object-cover"
-              />
-
-            </div>
-
-            <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-              Position the student's face clearly in the camera before registering.
-            </div>
 
           </div>
 
