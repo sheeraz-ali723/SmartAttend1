@@ -2,135 +2,75 @@ import * as faceapi from "@vladmandic/face-api";
 
 let modelsLoaded = false;
 
-// ======================================================
-// LOAD MODELS
-// ======================================================
+// Load face-api models
 export const loadFaceModels = async () => {
-  if (modelsLoaded) {
-    return;
-  }
+  if (modelsLoaded) return;
 
   try {
-    console.log(
-      "Loading face recognition models..."
-    );
+    console.log("Loading face recognition models...");
 
-    await faceapi.nets.tinyFaceDetector.loadFromUri(
-      "/models"
-    );
-
-    await faceapi.nets.faceLandmark68Net.loadFromUri(
-      "/models"
-    );
-
-    await faceapi.nets.faceRecognitionNet.loadFromUri(
-      "/models"
-    );
+    await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
+    await faceapi.nets.faceLandmark68Net.loadFromUri("/models");
+    await faceapi.nets.faceRecognitionNet.loadFromUri("/models");
 
     modelsLoaded = true;
 
-    console.log(
-      "Face recognition models loaded successfully"
-    );
+    console.log("Face recognition models loaded successfully");
   } catch (error) {
-    console.error(
-      "Failed to load face recognition models:",
-      error
-    );
-
+    console.error("Failed to load face recognition models:", error);
     throw error;
   }
 };
 
-// ======================================================
-// GET FACE DESCRIPTOR
-// ======================================================
-export const getFaceDescriptor = async (
-  image
-) => {
+// Detect one face and generate its descriptor
+export const getFaceDetection = async (image) => {
   await loadFaceModels();
 
-  console.log(
-    "Starting face detection..."
-  );
+  const detection = await faceapi
+    .detectSingleFace(
+      image,
+      new faceapi.TinyFaceDetectorOptions({
+        inputSize: 320,
+        scoreThreshold: 0.15,
+      })
+    )
+    .withFaceLandmarks()
+    .withFaceDescriptor();
 
-  const detection =
-    await faceapi
-      .detectSingleFace(
-        image,
-        new faceapi.TinyFaceDetectorOptions({
-          inputSize: 320,
-          scoreThreshold: 0.2,
-        })
-      )
-      .withFaceLandmarks()
-      .withFaceDescriptor();
+  return detection;
+};
 
-  console.log(
-    "Detection result:",
-    detection
-  );
+// Get only the face descriptor
+export const getFaceDescriptor = async (image) => {
+  const detection = await getFaceDetection(image);
 
   if (!detection) {
-    throw new Error(
-      "No face detected"
-    );
+    throw new Error("No face detected");
   }
-
-  console.log(
-    "Face detected successfully"
-  );
-
-  console.log(
-    "Descriptor length:",
-    detection.descriptor.length
-  );
 
   return detection.descriptor;
 };
 
-// ======================================================
-// FIND MATCHING STUDENT
-// ======================================================
-export const findMatchingStudent = async (
-  descriptor,
-  students
-) => {
+// Find the closest matching student
+export const findMatchingStudent = async (descriptor, students) => {
   let bestMatch = null;
   let bestDistance = Infinity;
 
   for (const student of students) {
-    if (!student.faceId) {
-      continue;
-    }
+    if (!student.faceId) continue;
 
     try {
-      const storedDescriptor =
-        JSON.parse(student.faceId);
+      const storedDescriptor = JSON.parse(student.faceId);
 
-      if (
-        !Array.isArray(
-          storedDescriptor
-        ) ||
-        storedDescriptor.length !==
-          descriptor.length
-      ) {
-        console.warn(
-          `Invalid descriptor length for ${student.name}`
-        );
+      if (!Array.isArray(storedDescriptor)) continue;
 
+      if (storedDescriptor.length !== descriptor.length) {
         continue;
       }
 
-      const distance =
-        faceapi.euclideanDistance(
-          descriptor,
-          storedDescriptor
-        );
-
-      console.log(
-        `Face distance for ${student.name}:`,
-        distance
+      const distance = faceapi.euclideanDistance(
+        descriptor,
+        storedDescriptor
       );
 
       if (distance < bestDistance) {
@@ -145,43 +85,12 @@ export const findMatchingStudent = async (
     }
   }
 
+  // Face matching threshold
   const MATCH_THRESHOLD = 0.5;
 
-  console.log(
-    "Best match:",
-    bestMatch?.name || "None"
-  );
-
-  console.log(
-    "Best distance:",
-    bestDistance
-  );
-
-  console.log(
-    "Match threshold:",
-    MATCH_THRESHOLD
-  );
-
-  if (
-    !bestMatch ||
-    bestDistance >= MATCH_THRESHOLD
-  ) {
-    console.log(
-      "❌ Face rejected - no reliable match"
-    );
-
+  if (!bestMatch || bestDistance >= MATCH_THRESHOLD) {
     return null;
   }
-
-  console.log(
-    "✅ Face accepted:",
-    bestMatch.name
-  );
-
-  console.log(
-    "Distance:",
-    bestDistance
-  );
 
   return {
     student: bestMatch,

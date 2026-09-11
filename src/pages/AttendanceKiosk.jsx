@@ -1,9 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
 import {
   FiCamera,
   FiCheckCircle,
   FiXCircle,
   FiUser,
+  FiShield,
+  FiActivity,
+  FiAlertCircle,
 } from "react-icons/fi";
 
 import {
@@ -11,165 +19,198 @@ import {
   loadFaceModels,
 } from "../utils/faceRecognition";
 
-import { getSettings } from "../utils/settings";
+import {
+  getSettings,
+} from "../utils/settings";
+
+// ======================================================
+// CONFIGURATION
+// ======================================================
+
+const API_URL =
+  "https://railway-up-production-d063.up.railway.app";
+
+// Number of consistent matches required
+const REQUIRED_CONFIRMATIONS = 2;
+
+// Time between recognition attempts
+const SCAN_INTERVAL = 1000;
+
+// ======================================================
+// SPEAK
+// ======================================================
+
+const speak = (text) => {
+  try {
+    if (
+      typeof window === "undefined" ||
+      !window.speechSynthesis
+    ) {
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const utterance =
+      new SpeechSynthesisUtterance(text);
+
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    window.speechSynthesis.speak(
+      utterance
+    );
+  } catch (error) {
+    console.error(
+      "Speech error:",
+      error
+    );
+  }
+};
+
+// ======================================================
+// COMPONENT
+// ======================================================
 
 const AttendanceKiosk = () => {
-  const videoRef = useRef(null);
+  // ====================================================
+  // REFS
+  // ====================================================
 
-  const streamRef = useRef(null);
+  const videoRef =
+    useRef(null);
 
-  const scanIntervalRef = useRef(null);
+  const streamRef =
+    useRef(null);
 
-  const scanningRef = useRef(false);
+  const scanIntervalRef =
+    useRef(null);
 
-  const [cameraReady, setCameraReady] =
-    useState(false);
+  const scanningRef =
+    useRef(false);
 
-  const [modelsReady, setModelsReady] =
-    useState(false);
+  const mountedRef =
+    useRef(true);
 
-  const [message, setMessage] =
-    useState("Starting camera...");
+  // Track repeated recognition
+  const candidateRef =
+    useRef(null);
 
-  const [messageType, setMessageType] =
-    useState("info");
+  const confirmationCountRef =
+    useRef(0);
+
+  // ====================================================
+  // STATE
+  // ====================================================
+
+  const [
+    cameraReady,
+    setCameraReady,
+  ] = useState(false);
+
+  const [
+    modelsReady,
+    setModelsReady,
+  ] = useState(false);
+
+  const [
+    message,
+    setMessage,
+  ] = useState(
+    "Starting camera..."
+  );
+
+  const [
+    messageType,
+    setMessageType,
+  ] = useState("info");
 
   const [
     recognizedStudent,
     setRecognizedStudent,
   ] = useState(null);
 
-  const [settings, setSettings] =
-    useState({});
+  const [
+    settings,
+    setSettings,
+  ] = useState({});
 
-  const [error, setError] =
-    useState("");
+  const [
+    error,
+    setError,
+  ] = useState("");
 
-  // ======================================================
-  // LOAD MODELS
-  // ======================================================
+  const [
+    confirmationCount,
+    setConfirmationCount,
+  ] = useState(0);
 
-  useEffect(() => {
-    const initializeKiosk = async () => {
-      try {
-        setMessage(
-          "Loading face recognition models..."
-        );
+  const [
+    attendanceStatus,
+    setAttendanceStatus,
+  ] = useState("idle");
 
-        setMessageType("info");
+  // ====================================================
+  // RESET RECOGNITION
+  // ====================================================
 
-        const savedSettings =
-          getSettings();
+  const resetRecognition = () => {
+    candidateRef.current = null;
 
-        setSettings(
-          savedSettings || {}
-        );
+    confirmationCountRef.current = 0;
 
-        await loadFaceModels();
+    if (mountedRef.current) {
+      setConfirmationCount(0);
+    }
+  };
 
-        setModelsReady(true);
+  // ====================================================
+  // READY FOR NEXT STUDENT
+  // ====================================================
 
-        setMessage(
-          "Starting camera..."
-        );
-      } catch (err) {
-        console.error(
-          "Kiosk initialization error:",
-          err
-        );
+  const readyForNextStudent = () => {
+    resetRecognition();
 
-        setError(
-          "Unable to load face recognition. Please refresh the page."
-        );
+    if (!mountedRef.current) {
+      return;
+    }
 
-        setMessageType("error");
-      }
-    };
+    setRecognizedStudent(null);
 
-    initializeKiosk();
-  }, []);
+    setAttendanceStatus("idle");
 
-  // ======================================================
+    setMessage(
+      "Ready for next student"
+    );
+
+    setMessageType("info");
+  };
+
+  // ====================================================
   // START CAMERA
-  // ======================================================
+  // ====================================================
 
-  useEffect(() => {
-    if (!modelsReady) return;
+  const startCamera = async () => {
+    try {
+      setError("");
 
-    let mounted = true;
+      setMessage(
+        "Requesting camera access..."
+      );
 
-    const startCamera = async () => {
-      try {
-        setMessage(
-          "Requesting camera access..."
+      setMessageType("info");
+
+      if (
+        !navigator.mediaDevices ||
+        !navigator.mediaDevices.getUserMedia
+      ) {
+        throw new Error(
+          "Camera is not supported by this browser."
         );
-
-        setMessageType("info");
-
-        const stream =
-          await navigator.mediaDevices.getUserMedia(
-            {
-              video: {
-                facingMode: "user",
-
-                width: {
-                  ideal: 640,
-                },
-
-                height: {
-                  ideal: 480,
-                },
-              },
-
-              audio: false,
-            }
-          );
-
-        if (!mounted) {
-          stream
-            .getTracks()
-            .forEach((track) =>
-              track.stop()
-            );
-
-          return;
-        }
-
-        streamRef.current = stream;
-
-        if (videoRef.current) {
-          videoRef.current.srcObject =
-            stream;
-
-          await videoRef.current.play();
-
-          setCameraReady(true);
-
-          setMessage(
-            "Look at the camera"
-          );
-
-          setMessageType("info");
-        }
-      } catch (err) {
-        console.error(
-          "Camera error:",
-          err
-        );
-
-        setError(
-          "Camera access was denied or the camera is unavailable."
-        );
-
-        setMessageType("error");
       }
-    };
 
-    startCamera();
-
-    return () => {
-      mounted = false;
-
+      // Stop old stream
       if (streamRef.current) {
         streamRef.current
           .getTracks()
@@ -179,33 +220,157 @@ const AttendanceKiosk = () => {
 
         streamRef.current = null;
       }
-    };
-  }, [modelsReady]);
 
-  // ======================================================
+      const stream =
+        await navigator.mediaDevices.getUserMedia(
+          {
+            video: {
+              facingMode: "user",
+
+              width: {
+                ideal: 640,
+              },
+
+              height: {
+                ideal: 480,
+              },
+
+              frameRate: {
+                ideal: 30,
+                max: 30,
+              },
+            },
+
+            audio: false,
+          }
+        );
+
+      streamRef.current =
+        stream;
+
+      const video =
+        videoRef.current;
+
+      if (!video) {
+        throw new Error(
+          "Video element is not available."
+        );
+      }
+
+      video.srcObject =
+        stream;
+
+      video.muted = true;
+      video.playsInline = true;
+      video.autoplay = true;
+
+      await video.play();
+
+      await new Promise(
+        (resolve) => {
+          if (
+            video.videoWidth > 0 &&
+            video.videoHeight > 0
+          ) {
+            resolve();
+            return;
+          }
+
+          const handleLoaded =
+            () => {
+              video.removeEventListener(
+                "loadedmetadata",
+                handleLoaded
+              );
+
+              resolve();
+            };
+
+          video.addEventListener(
+            "loadedmetadata",
+            handleLoaded
+          );
+        }
+      );
+
+      if (!mountedRef.current) {
+        return;
+      }
+
+      setCameraReady(true);
+
+      setMessage(
+        "Camera ready. Look at the camera."
+      );
+
+      setMessageType("info");
+
+      console.log(
+        "Camera started:",
+        video.videoWidth,
+        "x",
+        video.videoHeight
+      );
+    } catch (err) {
+      console.error(
+        "Camera error:",
+        err
+      );
+
+      if (!mountedRef.current) {
+        return;
+      }
+
+      setCameraReady(false);
+
+      setError(
+        err?.message ||
+          "Unable to access camera."
+      );
+
+      setMessage(
+        "Camera could not be started."
+      );
+
+      setMessageType("error");
+    }
+  };
+
+  // ====================================================
   // RECOGNIZE FACE
-  // ======================================================
+  // ====================================================
 
   const recognizeFace = async () => {
-    if (scanningRef.current)
+    if (
+      scanningRef.current ||
+      !cameraReady ||
+      !modelsReady ||
+      !videoRef.current
+    ) {
       return;
+    }
 
-    if (!cameraReady)
-      return;
+    const video =
+      videoRef.current;
 
-    if (!videoRef.current)
+    if (
+      video.readyState < 2 ||
+      video.videoWidth === 0 ||
+      video.videoHeight === 0
+    ) {
       return;
+    }
 
     scanningRef.current = true;
 
     try {
-      setMessage("Scanning...");
-
-      setMessageType("info");
+      // ------------------------------------------------
+      // GET FACE DESCRIPTOR
+      // ------------------------------------------------
 
       const descriptor =
         await getFaceDescriptor(
-          videoRef.current
+          video
         );
 
       if (
@@ -217,9 +382,13 @@ const AttendanceKiosk = () => {
         );
       }
 
+      // ------------------------------------------------
+      // CONFIRM-ONLY REQUEST
+      // ------------------------------------------------
+
       const response =
         await fetch(
-          "https://railway-up-production-d063.up.railway.app/api/attendance/kiosk-recognize",
+          `${API_URL}/api/attendance/kiosk-recognize`,
           {
             method: "POST",
 
@@ -233,180 +402,541 @@ const AttendanceKiosk = () => {
                 Array.from(
                   descriptor
                 ),
+
+              confirmOnly: true,
             }),
           }
         );
 
-      const data =
-        await response.json();
+      let data = null;
 
-      console.log(
-        "Kiosk response:",
-        data
-      );
-
-      // ==================================================
-      // UNKNOWN FACE
-      // ==================================================
-
-      if (!response.ok) {
-        if (
-          response.status === 401
-        ) {
-          setRecognizedStudent(null);
-
-          setMessage(
-            data.message ||
-              "Student not recognized. Attendance was NOT saved."
-          );
-
-          setMessageType("error");
-
-          return;
-        }
-
+      try {
+        data =
+          await response.json();
+      } catch {
         throw new Error(
-          data.message ||
-            "Face recognition failed."
+          "Invalid response from attendance server."
         );
       }
 
-      // ==================================================
-      // RECOGNIZED STUDENT
-      // ==================================================
-
-      setRecognizedStudent(
-        data.student || null
-      );
-
-      // ==================================================
-      // ADMIN ABSENT
-      // ==================================================
+      // ------------------------------------------------
+      // UNKNOWN FACE
+      // ------------------------------------------------
 
       if (
-        data.alreadyAbsent &&
-        data.markedByAdmin
+        response.status === 401
       ) {
-        setMessage(
-          "Student was marked Absent by Admin. Attendance remains Absent."
-        );
+        resetRecognition();
 
-        setMessageType(
-          "warning"
-        );
+        if (mountedRef.current) {
+          setRecognizedStudent(null);
 
-        await new Promise(
-          (resolve) =>
-            setTimeout(
-              resolve,
-              3000
-            )
-        );
+          setAttendanceStatus(
+            "unknown"
+          );
 
-        setRecognizedStudent(
-          null
-        );
+          setMessage(
+            "Face detected, but student was not recognized."
+          );
 
-        setMessage(
-          "Look at the camera"
-        );
-
-        setMessageType("info");
+          setMessageType(
+            "warning"
+          );
+        }
 
         return;
       }
 
-      // ==================================================
-      // ALREADY PRESENT
-      // ==================================================
+      // ------------------------------------------------
+      // SERVER ERROR
+      // ------------------------------------------------
 
-      if (
-        data.alreadyPresent
-      ) {
-        setMessage(
-          `${
-            data.student?.name ||
-            "Student"
-          } is already marked Present today.`
-        );
-
-        setMessageType(
-          "success"
-        );
-      } else {
-        // ================================================
-        // PRESENT SUCCESS
-        // ================================================
-
-        setMessage(
-          `${
-            data.student?.name ||
-            "Student"
-          } marked Present successfully!`
-        );
-
-        setMessageType(
-          "success"
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            "Attendance server error."
         );
       }
 
-      await new Promise(
-        (resolve) =>
-          setTimeout(
-            resolve,
-            2500
-          )
-      );
+      // ------------------------------------------------
+      // STUDENT RECOGNIZED
+      // ------------------------------------------------
 
-      setRecognizedStudent(
-        null
-      );
+      const student =
+        data?.student;
 
-      setMessage(
-        "Look at the camera"
-      );
+      if (!student?.id) {
+        resetRecognition();
+        return;
+      }
 
-      setMessageType("info");
-    } catch (err) {
-      console.error(
-        "Face recognition error:",
-        err
-      );
+      const studentId =
+        String(student.id);
 
-      setRecognizedStudent(
-        null
-      );
+      // ------------------------------------------------
+      // SAME STUDENT CONFIRMATION
+      // ------------------------------------------------
 
       if (
-        err.message ===
-        "No face detected"
+        candidateRef.current ===
+        studentId
       ) {
+        confirmationCountRef.current +=
+          1;
+      } else {
+        candidateRef.current =
+          studentId;
+
+        confirmationCountRef.current =
+          1;
+      }
+
+      const currentCount =
+        confirmationCountRef.current;
+
+      if (mountedRef.current) {
+        setRecognizedStudent(
+          student
+        );
+
+        setConfirmationCount(
+          currentCount
+        );
+
+        setAttendanceStatus(
+          "recognizing"
+        );
+
         setMessage(
-          "No face detected. Please look at the camera."
+          `Recognizing ${student.name}...`
         );
 
         setMessageType(
-          "warning"
+          "info"
         );
-      } else {
+      }
+
+      console.log(
+        `Recognition confirmation ${currentCount}/${REQUIRED_CONFIRMATIONS}:`,
+        student.name,
+        "distance:",
+        data.distance
+      );
+
+      // ------------------------------------------------
+      // WAIT FOR SECOND CONFIRMATION
+      // ------------------------------------------------
+
+      if (
+        currentCount <
+        REQUIRED_CONFIRMATIONS
+      ) {
+        return;
+      }
+
+      // ------------------------------------------------
+      // STABLE MATCH
+      // SAVE ATTENDANCE
+      // ------------------------------------------------
+
+      if (mountedRef.current) {
+        setAttendanceStatus(
+          "saving"
+        );
+
         setMessage(
-          err.message ||
-            "Unable to recognize face. Please try again."
+          `${student.name} recognized. Saving attendance...`
+        );
+
+        setMessageType(
+          "info"
+        );
+      }
+
+      const saveResponse =
+        await fetch(
+          `${API_URL}/api/attendance/kiosk-recognize`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              descriptor:
+                Array.from(
+                  descriptor
+                ),
+
+              confirmOnly: false,
+            }),
+          }
+        );
+
+      let saveData = null;
+
+      try {
+        saveData =
+          await saveResponse.json();
+      } catch {
+        throw new Error(
+          "Invalid attendance save response."
+        );
+      }
+
+      // ------------------------------------------------
+      // SAVE FAILED
+      // ------------------------------------------------
+
+      if (!saveResponse.ok) {
+        throw new Error(
+          saveData?.message ||
+            "Failed to save attendance."
+        );
+      }
+
+      // ------------------------------------------------
+      // ADMIN ABSENT
+      // ------------------------------------------------
+
+      if (
+        saveData?.alreadyAbsent &&
+        saveData?.markedByAdmin
+      ) {
+        if (mountedRef.current) {
+          setAttendanceStatus(
+            "absent"
+          );
+
+          setMessage(
+            "Student was marked Absent by Admin."
+          );
+
+          setMessageType(
+            "warning"
+          );
+        }
+
+        speak(
+          `${student.name} was marked absent by admin.`
+        );
+
+        // NO DELAY
+        // Immediately ready for next student
+        readyForNextStudent();
+
+        return;
+      }
+
+      // ------------------------------------------------
+      // ALREADY PRESENT
+      // ------------------------------------------------
+
+      if (
+        saveData?.alreadyPresent
+      ) {
+        const studentName =
+          saveData?.student?.name ||
+          student.name;
+
+        if (mountedRef.current) {
+          setRecognizedStudent(
+            saveData?.student ||
+              student
+          );
+
+          setAttendanceStatus(
+            "already"
+          );
+
+          setMessage(
+            `${studentName} is already marked Present today.`
+          );
+
+          setMessageType(
+            "success"
+          );
+        }
+
+        speak(
+          `${studentName} is already marked present today.`
+        );
+
+        // NO 3 SECOND DELAY
+        // Immediately ready
+        readyForNextStudent();
+
+        return;
+      }
+
+      // ------------------------------------------------
+      // SUCCESSFUL ATTENDANCE
+      // ------------------------------------------------
+
+      if (
+        saveData?.attendanceSaved
+      ) {
+        const studentName =
+          saveData?.student?.name ||
+          student.name;
+
+        if (mountedRef.current) {
+          setRecognizedStudent(
+            saveData?.student ||
+              student
+          );
+
+          setAttendanceStatus(
+            "success"
+          );
+
+          setMessage(
+            `${studentName} marked Present successfully!`
+          );
+
+          setMessageType(
+            "success"
+          );
+        }
+
+        speak(
+          `${studentName} marked present successfully.`
+        );
+
+        // =================================================
+        // IMPORTANT:
+        // NO RESULT COOLDOWN
+        // NO setTimeout
+        // NO 3 SECOND DELAY
+        //
+        // Immediately prepare for next student.
+        // =================================================
+
+        readyForNextStudent();
+
+        return;
+      }
+
+      // ------------------------------------------------
+      // OTHER ABSENT
+      // ------------------------------------------------
+
+      if (
+        saveData?.alreadyAbsent
+      ) {
+        if (mountedRef.current) {
+          setAttendanceStatus(
+            "absent"
+          );
+
+          setMessage(
+            saveData.message ||
+              "Student is marked Absent. Attendance was not changed."
+          );
+
+          setMessageType(
+            "warning"
+          );
+        }
+
+        speak(
+          "Student is marked absent. Attendance was not changed."
+        );
+
+        // Immediately ready
+        readyForNextStudent();
+
+        return;
+      }
+
+      // ------------------------------------------------
+      // UNEXPECTED RESPONSE
+      // ------------------------------------------------
+
+      throw new Error(
+        saveData?.message ||
+          "Attendance was not saved."
+      );
+    } catch (err) {
+      console.error(
+        "Recognition error:",
+        err
+      );
+
+      // No face is normal
+      if (
+        err?.message ===
+        "No face detected"
+      ) {
+        if (mountedRef.current) {
+          setMessage(
+            "Please look directly at the camera."
+          );
+
+          setMessageType(
+            "warning"
+          );
+
+          setAttendanceStatus(
+            "idle"
+          );
+        }
+
+        return;
+      }
+
+      if (mountedRef.current) {
+        setError(
+          err?.message ||
+            "Face recognition failed."
+        );
+
+        setMessage(
+          "Recognition temporarily failed. Trying again..."
         );
 
         setMessageType(
           "error"
         );
+
+        setAttendanceStatus(
+          "error"
+        );
       }
+
+      resetRecognition();
     } finally {
       scanningRef.current =
         false;
     }
   };
 
-  // ======================================================
+  // ====================================================
+  // INITIALIZATION
+  // ====================================================
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    const initialize = async () => {
+      try {
+        // ------------------------------------------------
+        // SETTINGS
+        // ------------------------------------------------
+
+        try {
+          const loadedSettings =
+            await getSettings();
+
+          if (
+            mountedRef.current &&
+            loadedSettings
+          ) {
+            setSettings(
+              loadedSettings
+            );
+          }
+        } catch (settingsError) {
+          console.warn(
+            "Could not load settings:",
+            settingsError
+          );
+        }
+
+        // ------------------------------------------------
+        // MODELS
+        // ------------------------------------------------
+
+        setMessage(
+          "Loading AI face recognition..."
+        );
+
+        setMessageType("info");
+
+        await loadFaceModels();
+
+        if (
+          !mountedRef.current
+        ) {
+          return;
+        }
+
+        setModelsReady(true);
+
+        // ------------------------------------------------
+        // CAMERA
+        // ------------------------------------------------
+
+        await startCamera();
+      } catch (err) {
+        console.error(
+          "Kiosk initialization error:",
+          err
+        );
+
+        if (
+          mountedRef.current
+        ) {
+          setError(
+            err?.message ||
+              "Failed to initialize kiosk."
+          );
+
+          setMessage(
+            "Kiosk initialization failed."
+          );
+
+          setMessageType(
+            "error"
+          );
+        }
+      }
+    };
+
+    initialize();
+
+    return () => {
+      mountedRef.current =
+        false;
+
+      if (
+        scanIntervalRef.current
+      ) {
+        clearInterval(
+          scanIntervalRef.current
+        );
+
+        scanIntervalRef.current =
+          null;
+      }
+
+      if (
+        streamRef.current
+      ) {
+        streamRef.current
+          .getTracks()
+          .forEach(
+            (track) =>
+              track.stop()
+          );
+
+        streamRef.current =
+          null;
+      }
+
+      if (
+        window.speechSynthesis
+      ) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  // ====================================================
   // AUTOMATIC SCANNING
-  // ======================================================
+  // ====================================================
 
   useEffect(() => {
     if (
@@ -416,16 +946,31 @@ const AttendanceKiosk = () => {
       return;
     }
 
+    if (
+      scanIntervalRef.current
+    ) {
+      clearInterval(
+        scanIntervalRef.current
+      );
+    }
+
+    // First scan
+    const initialTimeout =
+      setTimeout(() => {
+        recognizeFace();
+      }, 700);
+
+    // Continue scanning
     scanIntervalRef.current =
       setInterval(() => {
-        if (
-          !scanningRef.current
-        ) {
-          recognizeFace();
-        }
-      }, 2500);
+        recognizeFace();
+      }, SCAN_INTERVAL);
 
     return () => {
+      clearTimeout(
+        initialTimeout
+      );
+
       if (
         scanIntervalRef.current
       ) {
@@ -442,437 +987,650 @@ const AttendanceKiosk = () => {
     modelsReady,
   ]);
 
-  // ======================================================
-  // CLEANUP
-  // ======================================================
-
-  useEffect(() => {
-    return () => {
-      if (
-        scanIntervalRef.current
-      ) {
-        clearInterval(
-          scanIntervalRef.current
-        );
-      }
-
-      if (
-        streamRef.current
-      ) {
-        streamRef.current
-          .getTracks()
-          .forEach((track) =>
-            track.stop()
-          );
-      }
-    };
-  }, []);
-
-  // ======================================================
-  // MESSAGE STYLE
-  // ======================================================
+  // ====================================================
+  // STATUS STYLE
+  // ====================================================
 
   const getMessageStyle = () => {
     switch (messageType) {
       case "success":
-        return "border-green-500/40 bg-green-500/10 text-green-400";
-
-      case "error":
-        return "border-red-500/40 bg-red-500/10 text-red-400";
+        return "bg-emerald-500/10 border-emerald-500/20 text-emerald-300";
 
       case "warning":
-        return "border-yellow-500/40 bg-yellow-500/10 text-yellow-400";
+        return "bg-amber-500/10 border-amber-500/20 text-amber-300";
+
+      case "error":
+        return "bg-red-500/10 border-red-500/20 text-red-300";
 
       default:
-        return "border-blue-500/40 bg-blue-500/10 text-blue-400";
+        return "bg-blue-500/10 border-blue-500/20 text-blue-300";
     }
   };
 
-  // ======================================================
-  // MESSAGE ICON
-  // ======================================================
+  // ====================================================
+  // STATUS ICON
+  // ====================================================
 
-  const getIcon = () => {
-    switch (messageType) {
-      case "success":
-        return (
-          <FiCheckCircle
-            size={24}
-          />
-        );
-
-      case "error":
-        return (
-          <FiXCircle
-            size={24}
-          />
-        );
-
-      case "warning":
-        return (
-          <FiXCircle
-            size={24}
-          />
-        );
-
-      default:
-        return (
-          <FiCamera
-            size={24}
-          />
-        );
+  const getStatusIcon = () => {
+    if (
+      attendanceStatus ===
+      "success"
+    ) {
+      return (
+        <FiCheckCircle className="w-5 h-5" />
+      );
     }
+
+    if (
+      attendanceStatus ===
+      "error"
+    ) {
+      return (
+        <FiXCircle className="w-5 h-5" />
+      );
+    }
+
+    if (
+      attendanceStatus ===
+      "absent"
+    ) {
+      return (
+        <FiAlertCircle className="w-5 h-5" />
+      );
+    }
+
+    return (
+      <FiActivity className="w-5 h-5" />
+    );
   };
 
-  // ======================================================
-  // UI
-  // ======================================================
+  // ====================================================
+  // RENDER
+  // ====================================================
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      <div className="flex min-h-screen flex-col">
+    <div className="min-h-screen bg-slate-950 text-white px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
 
-        {/* HEADER */}
+      <div className="max-w-7xl mx-auto">
 
-        <header className="border-b border-slate-800 bg-slate-900/80 px-6 py-5 backdrop-blur">
-          <div className="mx-auto flex max-w-6xl items-center justify-between">
+        {/* =================================================
+            HEADER
+        ================================================= */}
 
-            <div className="flex items-center gap-3">
+        <header className="mb-5 sm:mb-7">
 
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 shadow-lg shadow-blue-600/20">
-                <FiCamera size={22} />
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl px-4 py-4 sm:px-6">
+
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+
+              {/* BRAND */}
+
+              <div className="flex items-center gap-3">
+
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-blue-600/15 border border-blue-500/20 flex items-center justify-center">
+
+                  <FiCamera className="w-6 h-6 sm:w-7 sm:h-7 text-blue-400" />
+
+                </div>
+
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
+                    SmartAttend AI
+                  </h1>
+
+                  <p className="text-xs sm:text-sm text-slate-400">
+                    Face Recognition Attendance
+                  </p>
+                </div>
+
               </div>
 
-              <div>
-                <h1 className="text-xl font-bold">
-                  {settings?.schoolName ||
-                    "SmartAttend"}
-                </h1>
+              {/* SYSTEM STATUS */}
 
-                <p className="text-sm text-slate-400">
-                  AI Attendance Kiosk
-                </p>
+              <div className="flex items-center gap-2">
+
+                <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+
+                  <span className="relative flex h-2.5 w-2.5">
+
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" />
+
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400" />
+
+                  </span>
+
+                  <span className="text-xs font-medium text-emerald-300">
+                    Kiosk Online
+                  </span>
+
+                </div>
+
               </div>
 
-            </div>
-
-            <div className="hidden items-center gap-2 rounded-full border border-green-500/20 bg-green-500/10 px-4 py-2 text-sm text-green-400 sm:flex">
-              <span className="h-2 w-2 rounded-full bg-green-400" />
-              Kiosk Mode
             </div>
 
           </div>
+
         </header>
 
-        {/* MAIN */}
+        {/* =================================================
+            MAIN
+        ================================================= */}
 
-        <main className="flex flex-1 items-center justify-center px-4 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_0.75fr] gap-5">
 
-          <div className="w-full max-w-5xl">
+          {/* =================================================
+              CAMERA CARD
+          ================================================= */}
 
-            <div className="grid gap-8 lg:grid-cols-[1.4fr_0.8fr]">
+          <section className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
 
-              {/* CAMERA */}
+            {/* CARD HEADER */}
 
-              <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
+            <div className="px-4 py-4 sm:px-6 border-b border-slate-800">
 
-                <div className="border-b border-slate-800 px-6 py-4">
+              <div className="flex items-center justify-between">
 
-                  <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="font-semibold text-base sm:text-lg">
+                    Attendance Scanner
+                  </h2>
 
-                    <div>
-                      <h2 className="text-lg font-semibold">
-                        Attendance Camera
-                      </h2>
-
-                      <p className="mt-1 text-sm text-slate-400">
-                        Position your face clearly inside the camera.
-                      </p>
-                    </div>
-
-                    <div
-                      className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium ${
-                        cameraReady
-                          ? "bg-green-500/10 text-green-400"
-                          : "bg-yellow-500/10 text-yellow-400"
-                      }`}
-                    >
-                      <span
-                        className={`h-2 w-2 rounded-full ${
-                          cameraReady
-                            ? "bg-green-400"
-                            : "bg-yellow-400"
-                        }`}
-                      />
-
-                      {cameraReady
-                        ? "Camera Ready"
-                        : "Starting"}
-                    </div>
-
-                  </div>
-
+                  <p className="text-xs text-slate-500 mt-1">
+                    Position your face inside the guide
+                  </p>
                 </div>
 
-                <div className="relative aspect-video bg-black">
+                <div className="flex items-center gap-2 text-xs">
 
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    muted
-                    playsInline
-                    className="h-full w-full object-cover"
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      cameraReady
+                        ? "bg-emerald-400"
+                        : "bg-amber-400"
+                    }`}
                   />
 
-                  {/* FRAME */}
-
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-
-                    <div className="relative h-[70%] w-[45%] min-w-[180px] max-w-[300px] rounded-[45%] border-2 border-blue-400/70">
-
-                      <div className="absolute left-1/2 top-0 h-5 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border-t-2 border-blue-400" />
-
-                      <div className="absolute bottom-0 left-1/2 h-5 w-20 -translate-x-1/2 translate-y-1/2 rounded-full border-b-2 border-blue-400" />
-
-                      <div className="absolute left-0 top-1/2 h-20 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-l-2 border-blue-400" />
-
-                      <div className="absolute right-0 top-1/2 h-20 w-5 translate-x-1/2 -translate-y-1/2 rounded-full border-r-2 border-blue-400" />
-
-                    </div>
-
-                  </div>
-
-                  {/* LOADING */}
-
-                  {!cameraReady && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80">
-
-                      <div className="text-center">
-
-                        <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-slate-700 border-t-blue-500" />
-
-                        <p className="text-sm text-slate-300">
-                          {modelsReady
-                            ? "Starting camera..."
-                            : "Loading face recognition..."}
-                        </p>
-
-                      </div>
-
-                    </div>
-                  )}
+                  <span className="text-slate-400">
+                    {cameraReady
+                      ? "Ready"
+                      : "Starting"}
+                  </span>
 
                 </div>
 
-                {/* MESSAGE */}
+              </div>
 
-                <div className="px-6 py-5">
+            </div>
+
+            {/* CAMERA */}
+
+            <div className="p-3 sm:p-5">
+
+              <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-slate-700 shadow-inner">
+
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover scale-x-[-1]"
+                />
+
+                {/* DARK OVERLAY */}
+
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20 pointer-events-none" />
+
+                {/* FACE GUIDE */}
+
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
 
                   <div
-                    className={`flex items-center justify-center gap-3 rounded-xl border px-4 py-4 text-center ${getMessageStyle()}`}
+                    className={`relative w-44 h-56 sm:w-56 sm:h-72 rounded-[48%] border-2 transition-all duration-300 ${
+                      attendanceStatus ===
+                      "recognizing"
+                        ? "border-blue-400 shadow-[0_0_40px_rgba(59,130,246,0.25)]"
+                        : attendanceStatus ===
+                          "success"
+                        ? "border-emerald-400 shadow-[0_0_40px_rgba(16,185,129,0.3)]"
+                        : "border-white/50"
+                    }`}
                   >
-                    {getIcon()}
 
-                    <p className="text-sm font-medium">
+                    {/* CORNER MARKERS */}
+
+                    <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-10 h-0.5 bg-blue-400 rounded-full" />
+
+                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-10 h-0.5 bg-blue-400 rounded-full" />
+
+                  </div>
+
+                </div>
+
+                {/* CAMERA STATUS */}
+
+                <div className="absolute top-3 left-3">
+
+                  <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md border border-white/10 rounded-full px-3 py-1.5">
+
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        cameraReady
+                          ? "bg-emerald-400"
+                          : "bg-amber-400"
+                      }`}
+                    />
+
+                    <span className="text-[11px] font-medium text-white">
+                      {cameraReady
+                        ? "LIVE"
+                        : "CONNECTING"}
+                    </span>
+
+                  </div>
+
+                </div>
+
+                {/* AI BADGE */}
+
+                <div className="absolute top-3 right-3">
+
+                  <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md border border-white/10 rounded-full px-3 py-1.5">
+
+                    <FiShield className="w-3.5 h-3.5 text-blue-400" />
+
+                    <span className="text-[11px] text-slate-200">
+                      AI Recognition
+                    </span>
+
+                  </div>
+
+                </div>
+
+                {/* LOADING */}
+
+                {!cameraReady && (
+                  <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center">
+
+                    <div className="w-12 h-12 rounded-full border-2 border-slate-700 border-t-blue-400 animate-spin mb-4" />
+
+                    <p className="text-sm text-slate-300">
+                      {modelsReady
+                        ? "Starting camera..."
+                        : "Loading AI models..."}
+                    </p>
+
+                  </div>
+                )}
+
+              </div>
+
+              {/* STATUS */}
+
+              <div
+                className={`mt-4 border rounded-xl px-4 py-3 ${getMessageStyle()}`}
+              >
+
+                <div className="flex items-center gap-3">
+
+                  <div className="flex-shrink-0">
+                    {getStatusIcon()}
+                  </div>
+
+                  <div className="min-w-0">
+
+                    <p className="text-sm font-medium truncate">
                       {message}
                     </p>
+
+                    {attendanceStatus ===
+                      "recognizing" && (
+                      <p className="text-xs opacity-70 mt-0.5">
+                        Confirming identity...
+                      </p>
+                    )}
+
                   </div>
 
                 </div>
 
               </div>
 
-              {/* RESULT */}
+              {/* CONFIRMATION */}
 
-              <div className="flex flex-col rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+              {confirmationCount > 0 &&
+                confirmationCount <
+                  REQUIRED_CONFIRMATIONS && (
+                  <div className="mt-4">
 
-                <div>
+                    <div className="flex justify-between items-center text-xs mb-2">
 
-                  <h2 className="text-lg font-semibold">
-                    Recognition Result
-                  </h2>
+                      <span className="text-slate-400">
+                        Confirming identity
+                      </span>
 
-                  <p className="mt-1 text-sm text-slate-400">
-                    Student information will appear here after successful recognition.
-                  </p>
-
-                </div>
-
-                <div className="my-8 flex flex-1 items-center justify-center">
-
-                  {recognizedStudent ? (
-
-                    <div className="w-full text-center">
-
-                      <div className="mx-auto mb-5 flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-green-500/30 bg-green-500/10">
-
-                        {recognizedStudent.profilePicture ? (
-                          <img
-                            src={
-                              recognizedStudent.profilePicture
-                            }
-                            alt={
-                              recognizedStudent.name
-                            }
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <FiUser
-                            size={42}
-                            className="text-green-400"
-                          />
-                        )}
-
-                      </div>
-
-                      <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-green-500/10 px-3 py-1.5 text-xs font-semibold text-green-400">
-
-                        <FiCheckCircle
-                          size={14}
-                        />
-
-                        Recognized
-
-                      </div>
-
-                      <h3 className="text-2xl font-bold text-white">
+                      <span className="text-blue-400 font-medium">
+                        {confirmationCount}/
                         {
-                          recognizedStudent.name
+                          REQUIRED_CONFIRMATIONS
                         }
-                      </h3>
+                      </span>
 
-                      {recognizedStudent.rollNumber && (
-                        <p className="mt-2 text-sm text-slate-400">
-                          Roll No:{" "}
-                          {
-                            recognizedStudent.rollNumber
-                          }
-                        </p>
+                    </div>
+
+                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+
+                      <div
+                        className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                        style={{
+                          width: `${
+                            (confirmationCount /
+                              REQUIRED_CONFIRMATIONS) *
+                            100
+                          }%`,
+                        }}
+                      />
+
+                    </div>
+
+                  </div>
+                )}
+
+            </div>
+
+          </section>
+
+          {/* =================================================
+              STUDENT CARD
+          ================================================= */}
+
+          <section className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+
+            <div className="px-4 py-4 sm:px-6 border-b border-slate-800">
+
+              <h2 className="font-semibold text-base sm:text-lg">
+                Recognition Result
+              </h2>
+
+              <p className="text-xs text-slate-500 mt-1">
+                Student information appears here
+              </p>
+
+            </div>
+
+            <div className="p-4 sm:p-6">
+
+              {recognizedStudent ? (
+                <div className="space-y-5">
+
+                  {/* AVATAR */}
+
+                  <div className="flex justify-center">
+
+                    <div
+                      className={`relative w-24 h-24 rounded-full flex items-center justify-center border-2 ${
+                        attendanceStatus ===
+                        "success"
+                          ? "bg-emerald-500/10 border-emerald-500/30"
+                          : "bg-blue-500/10 border-blue-500/30"
+                      }`}
+                    >
+
+                      {attendanceStatus ===
+                      "success" && (
+                        <div className="absolute inset-0 rounded-full border border-emerald-400/30 animate-ping" />
                       )}
 
-                      {recognizedStudent.department && (
-                        <p className="mt-1 text-sm text-slate-400">
+                      <FiUser
+                        className={`w-11 h-11 ${
+                          attendanceStatus ===
+                          "success"
+                            ? "text-emerald-400"
+                            : "text-blue-400"
+                        }`}
+                      />
+
+                    </div>
+
+                  </div>
+
+                  {/* NAME */}
+
+                  <div className="text-center">
+
+                    <p className="text-xs uppercase tracking-wider text-slate-500 mb-1">
+                      Recognized Student
+                    </p>
+
+                    <h3 className="text-2xl sm:text-3xl font-bold text-white break-words">
+                      {
+                        recognizedStudent.name
+                      }
+                    </h3>
+
+                    {recognizedStudent.rollNumber && (
+                      <p className="text-sm text-slate-400 mt-2">
+                        Roll No:{" "}
+                        {
+                          recognizedStudent.rollNumber
+                        }
+                      </p>
+                    )}
+
+                  </div>
+
+                  {/* DETAILS */}
+
+                  <div className="grid grid-cols-2 gap-3">
+
+                    {recognizedStudent.department && (
+                      <div className="bg-slate-800/70 border border-slate-700/50 rounded-xl p-3">
+
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                          Department
+                        </p>
+
+                        <p className="text-sm text-slate-200 mt-1 truncate">
                           {
                             recognizedStudent.department
                           }
                         </p>
-                      )}
 
-                    </div>
+                      </div>
+                    )}
 
-                  ) : (
+                    {recognizedStudent.className && (
+                      <div className="bg-slate-800/70 border border-slate-700/50 rounded-xl p-3">
 
-                    <div className="text-center">
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                          Class
+                        </p>
 
-                      <div className="mx-auto mb-5 flex h-24 w-24 items-center justify-center rounded-full border border-slate-700 bg-slate-800">
+                        <p className="text-sm text-slate-200 mt-1 truncate">
+                          {
+                            recognizedStudent.className
+                          }
+                        </p>
 
-                        <FiUser
-                          size={40}
-                          className="text-slate-500"
-                        />
+                      </div>
+                    )}
+
+                  </div>
+
+                  {/* STATUS CARD */}
+
+                  <div
+                    className={`rounded-xl border p-4 ${
+                      attendanceStatus ===
+                      "success"
+                        ? "bg-emerald-500/10 border-emerald-500/20"
+                        : attendanceStatus ===
+                          "already"
+                        ? "bg-blue-500/10 border-blue-500/20"
+                        : "bg-blue-500/5 border-blue-500/15"
+                    }`}
+                  >
+
+                    <div className="flex items-center gap-3">
+
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          attendanceStatus ===
+                          "success"
+                            ? "bg-emerald-500/15"
+                            : "bg-blue-500/15"
+                        }`}
+                      >
+
+                        {attendanceStatus ===
+                        "success" ? (
+                          <FiCheckCircle className="w-5 h-5 text-emerald-400" />
+                        ) : (
+                          <FiActivity className="w-5 h-5 text-blue-400" />
+                        )}
 
                       </div>
 
-                      <p className="text-sm font-medium text-slate-300">
-                        Waiting for recognition
-                      </p>
+                      <div>
 
-                      <p className="mt-2 text-xs leading-5 text-slate-500">
-                        Please look directly at the camera.
-                        <br />
-                        Attendance is marked automatically.
-                      </p>
+                        <p className="text-sm font-semibold text-slate-200">
+                          {attendanceStatus ===
+                          "success"
+                            ? "Attendance recorded"
+                            : attendanceStatus ===
+                              "already"
+                            ? "Already present"
+                            : attendanceStatus ===
+                              "saving"
+                            ? "Saving attendance..."
+                            : "Face recognized"}
+                        </p>
+
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {attendanceStatus ===
+                          "success"
+                            ? "Student has been marked Present"
+                            : attendanceStatus ===
+                              "already"
+                            ? "Attendance was already marked today"
+                            : "Identity confirmation in progress"}
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                  {/* READY INDICATOR */}
+
+                  {attendanceStatus ===
+                    "idle" && (
+                    <div className="flex items-center justify-center gap-2 pt-1">
+
+                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
+
+                      <span className="text-xs text-slate-500">
+                        Ready for attendance
+                      </span>
 
                     </div>
                   )}
 
                 </div>
+              ) : (
+                <div className="min-h-[390px] flex flex-col items-center justify-center text-center">
 
-                {/* STATUS */}
+                  {/* EMPTY AVATAR */}
 
-                <div className="border-t border-slate-800 pt-5">
+                  <div className="relative w-28 h-28 rounded-full bg-slate-800/80 border border-slate-700 flex items-center justify-center mb-6">
 
-                  <div className="flex items-center justify-between text-sm">
+                    <div className="absolute inset-2 rounded-full border border-dashed border-slate-600" />
 
-                    <span className="text-slate-500">
-                      Face Recognition
-                    </span>
-
-                    <span
-                      className={
-                        modelsReady
-                          ? "font-medium text-green-400"
-                          : "font-medium text-yellow-400"
-                      }
-                    >
-                      {modelsReady
-                        ? "Ready"
-                        : "Loading"}
-                    </span>
+                    <FiUser className="w-12 h-12 text-slate-600" />
 
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between text-sm">
+                  <h3 className="text-lg font-semibold text-slate-300">
+                    Ready for student
+                  </h3>
 
-                    <span className="text-slate-500">
-                      Camera
-                    </span>
+                  <p className="text-sm text-slate-500 mt-2 max-w-xs leading-relaxed">
+                    Look at the camera and position your face inside the guide.
+                  </p>
 
-                    <span
-                      className={
-                        cameraReady
-                          ? "font-medium text-green-400"
-                          : "font-medium text-yellow-400"
-                      }
-                    >
-                      {cameraReady
-                        ? "Connected"
-                        : "Connecting"}
-                    </span>
+                  <div className="flex items-center gap-2 mt-6 text-xs text-slate-600">
 
-                  </div>
+                    <FiShield className="w-4 h-4" />
 
-                  <div className="mt-3 flex items-center justify-between text-sm">
-
-                    <span className="text-slate-500">
-                      Automatic Scanning
-                    </span>
-
-                    <span className="font-medium text-blue-400">
-                      Active
+                    <span>
+                      Secure AI face recognition
                     </span>
 
                   </div>
 
                 </div>
+              )}
+
+            </div>
+
+          </section>
+
+        </div>
+
+        {/* =================================================
+            ERROR
+        ================================================= */}
+
+        {error && (
+          <div className="mt-5 bg-red-950/30 border border-red-900/50 rounded-xl px-4 py-3">
+
+            <div className="flex items-start gap-3">
+
+              <FiXCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+
+              <div>
+
+                <p className="text-sm font-medium text-red-300">
+                  Kiosk Error
+                </p>
+
+                <p className="text-xs text-red-400 mt-1">
+                  {error}
+                </p>
 
               </div>
 
             </div>
 
-            {/* FOOTER */}
+          </div>
+        )}
 
-            <div className="mt-6 text-center">
+        {/* =================================================
+            FOOTER
+        ================================================= */}
 
-              <p className="text-xs text-slate-500">
-                SmartAttend • AI Face Recognition Attendance
-              </p>
+        <footer className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-600">
 
-              <p className="mt-1 text-xs text-slate-600">
-                Unknown or unrecognized faces are not saved as attendance records.
-              </p>
+          <span>
+            SmartAttend AI
+          </span>
 
-            </div>
+          <div className="flex items-center gap-2">
 
-            {error && (
-              <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-center text-sm text-red-400">
-                {error}
-              </div>
-            )}
+            <span>
+              Face Recognition
+            </span>
+
+            <span>•</span>
+
+            <span>
+              Automated Attendance
+            </span>
 
           </div>
 
-        </main>
+        </footer>
 
       </div>
     </div>
