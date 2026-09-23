@@ -17,7 +17,7 @@ const AttendanceHistory = () => {
       const token = localStorage.getItem("smartAttendToken");
 
       const response = await fetch(
-        "https://railway-up-production-d063.up.railway.app/api/attendance",
+        "https://projects-cs-production.up.railway.app/api/attendance",
         {
           headers: {
             Authorization: `Bearer ${token}`,

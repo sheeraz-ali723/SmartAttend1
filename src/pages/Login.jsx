@@ -24,7 +24,7 @@ const Login = () => {
       setLoading(true);
 
       const response = await fetch(
-        "https://railway-up-production-d063.up.railway.app/api/auth/login",
+        "https://projects-cs-production.up.railway.app/api/auth/login",
         {
           method: "POST",
           headers: {
