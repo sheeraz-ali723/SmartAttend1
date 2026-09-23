@@ -6,20 +6,10 @@ const protect = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-// ======================================================
-// JWT SECRET — REQUIRED IN PRODUCTION
-// ======================================================
-const JWT_SECRET = process.env.JWT_SECRET;
-
-if (!JWT_SECRET) {
-  throw new Error("JWT_SECRET is not configured.");
-}
+const JWT_SECRET = process.env.JWT_SECRET || "smartattend_jwt_secret_key_2026";
 
 // ======================================================
-// REGISTER ADMIN
-// ======================================================
-// Registration is intentionally disabled.
-// SmartAttend uses a controlled admin/demo account.
+// REGISTER ADMIN (SECURITY PURPOSE SE DISABLED)
 // ======================================================
 router.post("/register", (req, res) => {
   return res.status(403).json({
@@ -28,7 +18,7 @@ router.post("/register", (req, res) => {
 });
 
 // ======================================================
-// LOGIN
+// LOGIN ROUTE
 // ======================================================
 router.post("/login", async (req, res) => {
   try {
@@ -42,9 +32,8 @@ router.post("/login", async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    const admin = await Admin.findOne({
-      email: normalizedEmail,
-    });
+    // Database se admin record find karein
+    const admin = await Admin.findOne({ email: normalizedEmail });
 
     if (!admin) {
       return res.status(401).json({
@@ -52,17 +41,16 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    const passwordMatch = await bcrypt.compare(
-      password,
-      admin.password
-    );
+    // BCrypt password comparison
+    const isPasswordCorrect = await bcrypt.compare(password, admin.password);
 
-    if (!passwordMatch) {
+    if (!isPasswordCorrect) {
       return res.status(401).json({
         message: "Invalid email or password.",
       });
     }
 
+    // JWT token generate karein (7 days validity)
     const token = jwt.sign(
       {
         id: admin._id,
@@ -71,7 +59,7 @@ router.post("/login", async (req, res) => {
       },
       JWT_SECRET,
       {
-        expiresIn: "1d",
+        expiresIn: "7d",
       }
     );
 
@@ -88,21 +76,18 @@ router.post("/login", async (req, res) => {
     });
   } catch (error) {
     console.error("Login error:", error);
-
     return res.status(500).json({
-      message: "Login failed.",
+      message: "Login failed. Please try again later.",
     });
   }
 });
 
 // ======================================================
-// GET CURRENT ADMIN PROFILE
+// GET PROFILE ROUTE
 // ======================================================
 router.get("/profile", protect, async (req, res) => {
   try {
-    const admin = await Admin.findById(req.admin.id).select(
-      "-password"
-    );
+    const admin = await Admin.findById(req.admin.id).select("-password");
 
     if (!admin) {
       return res.status(404).json({
@@ -120,26 +105,11 @@ router.get("/profile", protect, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Get profile error:", error);
-
+    console.error("Profile error:", error);
     return res.status(500).json({
       message: "Failed to load admin profile.",
     });
   }
-});
-
-// ======================================================
-// UPDATE ADMIN PROFILE
-// ======================================================
-// Disabled for the public portfolio/demo.
-// Visitors cannot change email, password, name,
-// or profile picture through this API.
-// ======================================================
-router.put("/profile", protect, async (req, res) => {
-  return res.status(403).json({
-    message:
-      "Admin account changes are disabled for the SmartAttend demo.",
-  });
 });
 
 module.exports = router;
